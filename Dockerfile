@@ -1,24 +1,37 @@
-FROM php:8.2-cli
+# Utiliser l'image officielle PHP 8.3 avec Apache
+FROM php:8.3-apache
 
-# Installer dépendances système
+# Installer les extensions nécessaires
 RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    libonig-dev \
+    libzip-dev \
+    zip \
     unzip \
-    curl \
-    git \
-    libsqlite3-dev
+    && docker-php-ext-install pdo pdo_mysql mbstring zip
+
+# Activer mod_rewrite pour Apache
+RUN a2enmod rewrite
 
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Copier le projet
-WORKDIR /app
+# Définir le répertoire de travail
+WORKDIR /var/www/html
+
+# Copier les fichiers du projet
 COPY . .
 
-# Installer dépendances Laravel
-RUN composer install
+# Installer les dépendances PHP
+RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# Exposer le port
-EXPOSE 10000
+# Configurer les permissions
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html/storage \
+    && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Lancer Laravel
-CMD php artisan serve --host=0.0.0.0 --port=10000
+# Exposer le port (Render utilisera la variable PORT, mais Apache utilise 80 par défaut)
+EXPOSE 80
+
+# Commande de démarrage (avec migration automatique)
+CMD ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
