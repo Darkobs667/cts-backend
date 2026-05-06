@@ -1,5 +1,8 @@
 # Utiliser l'image officielle PHP 8.3 avec Apache
 FROM php:8.3-apache
+RUN a2enmod rewrite
+COPY config/apache.conf /etc/apache2/sites-available/000-default.conf
+RUN a2enmod rewrite
 
 # Installer les extensions nécessaires
 RUN apt-get update && apt-get install -y \
@@ -21,7 +24,7 @@ WORKDIR /var/www/html
 
 # Copier les fichiers du projet
 COPY . .
-RUN a2enmod rewrite
+
 
 # Installer les dépendances PHP
 RUN composer install --no-interaction --optimize-autoloader --no-dev
@@ -35,4 +38,4 @@ RUN chown -R www-data:www-data /var/www/html \
 EXPOSE 80
 
 # Commande de démarrage (avec migration automatique)
-CMD ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
