@@ -21,6 +21,7 @@ WORKDIR /var/www/html
 
 # Copier les fichiers du projet
 COPY . .
+RUN a2enmod rewrite
 
 # Installer les dépendances PHP
 RUN composer install --no-interaction --optimize-autoloader --no-dev

@@ -2,6 +2,11 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+Route::get('/ping', function () {
+    return response()->json(['message' => 'pong']);
+});
+
+
 
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Auth\AuthController;
@@ -9,6 +14,7 @@ use App\Http\Controllers\Api\PositionController;
 use App\Http\Controllers\Api\CandidateController;
 use App\Http\Controllers\Api\VoteController;
 use App\Http\Controllers\Api\UserController;
+
 
 
 /********** Routes d'authentification **********/
