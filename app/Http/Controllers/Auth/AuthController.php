@@ -42,7 +42,9 @@ class AuthController extends Controller
                 'data' => $result
             ], 201);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+            //return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+            // On garde 500 car 22000 n'est pas un code HTTP valide
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 

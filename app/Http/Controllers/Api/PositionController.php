@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
+
 class PositionController extends Controller
 {
     protected $positionService;
@@ -59,25 +60,32 @@ class PositionController extends Controller
     /**
      * Mettre à jour un poste (Admin uniquement)
      */
-    public function update(Request $request, Position $position): JsonResponse
-    {
-        $validator = Validator::make($request->all(), [
-            'title'       => 'sometimes|string|unique:positions,title,' . $position->id,
-            'description' => 'nullable|string',
-            'is_active'   => 'boolean'
-        ]);
+ public function update(Request $request, $id)
+{
+    $position = Position::findOrFail($id);
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+    $data = $request->only('title', 'description', 'is_active');
 
-        try {
-            $this->positionService->update($position, $request->all());
-            return response()->json(['message' => 'Poste mis à jour avec succès']);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
-        }
+    // Si on active le scrutin et qu'il n'a pas encore de date de début, on l'enregistre
+    if (isset($data['is_active']) && $data['is_active'] == true && !$position->started_at) {
+        $data['started_at'] = now();
     }
+
+    // Si on désactive, on efface started_at (pour un éventuel prochain démarrage)
+    if (isset($data['is_active']) && $data['is_active'] == false) {
+        $data['started_at'] = null;
+    }
+
+    $result = $this->positionService->update($position, $data);
+
+    if ($result) {
+        return response()->json([
+            'message' => 'Poste mis à jour avec succès',
+            'data' => $position->fresh()
+        ]);
+    }
+    return response()->json(['message' => 'Erreur lors de la mise à jour'], 500);
+}
 
     /**
      * Activer ou désactiver un poste (Admin uniquement)
@@ -96,15 +104,17 @@ class PositionController extends Controller
     /**
      * Supprimer un poste (Admin uniquement)
      */
-    public function destroy(Position $position): JsonResponse
-    {
-        try {
-            $this->positionService->delete($position);
-            return response()->json(['message' => 'Poste supprimé avec succès']);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 403);
-        }
+    public function destroy($id)
+{
+    $position = Position::findOrFail($id);
+    $result = $this->positionService->delete($position);
+
+    if ($result) {
+        return response()->json(['message' => 'Poste supprimé avec succès']);
     }
+
+    return response()->json(['message' => 'Erreur lors de la suppression'], 500);
+}
 
     /**
      * Liste des postes actifs pour les électeurs

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Candidate;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Collection;
+use App\Models\Vote;
 
 class CandidatService 
 {
@@ -89,14 +90,23 @@ class CandidatService
     /**
      * Supprimer un candidat
      */
-    public function delete(Candidate $candidate): bool
-    {
-        $user = auth('api')->user();
-
-        if (!$user || $user->role !== 'admin') {
-            throw new \Exception('Seul un administrateur peut supprimer un candidat', 403);
-        }
-
-        return $candidate->delete();
+ public function delete(Candidate $candidate): bool
+{
+    $user = auth('api')->user();
+    if (!$user || $user->role !== 'admin') {
+        throw new \Exception('Seul un administrateur peut supprimer un candidat.', 403);
     }
+
+    // Supprimer les votes pour ce candidat
+    Vote::where('candidate_id', $candidate->id)->delete();
+
+    // Supprimer la photo si elle existe
+    if ($candidate->photo_path) {
+        \Storage::disk('public')->delete($candidate->photo_path);
+    }
+
+    return $candidate->delete();
+}
+
+
 }
