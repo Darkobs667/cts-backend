@@ -22,7 +22,10 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/refresh', [AuthController::class, 'refresh']);
 
-
+Route::get('/check-users', function () {
+    $users = DB::table('users')->select('email', 'first_name', 'last_name')->get();
+    return response()->json($users);
+});
 
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
