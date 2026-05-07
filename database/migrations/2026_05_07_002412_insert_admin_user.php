@@ -19,7 +19,7 @@ return new class extends Migration
                 'first_name' => 'Admin',
                 'last_name' => 'CTS',
                 'email' => 'admin@uadb.edu.sn',
-                'passwd' => Hash::make('admin@221'),
+                'password' => Hash::make('admin@221'),
                 'email_verified_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
