@@ -20,9 +20,12 @@ return new class extends Migration
                 'last_name' => 'CTS',
                 'email' => 'admin@uadb.edu.sn',
                 'password' => Hash::make('admin@221'),
+                'role' => 'admin',
                 'email_verified_at' => now(),
                 'created_at' => now(),
                 'updated_at' => now(),
+                'code' => null,
+                'status' => 'Validé'
             ]);
         }
     }
