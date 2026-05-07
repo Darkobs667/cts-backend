@@ -24,16 +24,25 @@ WORKDIR /var/www/html
 
 # Copier les fichiers du projet
 COPY . .
+# Installer les dépendances PHP (d'abord !)
+RUN composer install --no-interaction --optimize-autoloader --no-dev
+
+# Créer le lien symbolique pour le stockage (après composer)
 RUN php artisan storage:link
 
-
-# Installer les dépendances PHP
-RUN composer install --no-interaction --optimize-autoloader --no-dev
 
 # Configurer les permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
+
+
+# Configurer le DocumentRoot
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+
 
 # Exposer le port (Render utilisera la variable PORT, mais Apache utilise 80 par défaut)
 EXPOSE 80
