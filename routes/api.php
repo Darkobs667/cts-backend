@@ -23,22 +23,18 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/refresh', [AuthController::class, 'refresh']);
 
 Route::get('/setup-admin', function () {
-    // Vérifier si l'utilisateur existe déjà
-    $user = \App\Models\User::where('email', 'admin@uadb.edu.sn')->first();
-    if ($user) {
-        return response()->json(['message' => 'Admin déjà existant', 'user' => $user]);
-    }
-
-    $user = \App\Models\User::create([
-        'name' => 'Admin',
-        'email' => 'admin@uadb.edu.sn',
-        'password' => bcrypt('admin@221'),
-        'email_verified_at' => now(),
-    ]);
-
-    return response()->json(['message' => 'Admin créé avec succès !', 'user' => $user]);
+    DB::table('users')->updateOrInsert(
+        ['email' => 'admin@uadb.edu.sn'],
+        [
+            'first_name' => 'Admin',
+            'last_name' => 'CTS',
+            'email' => 'admin@uadb.edu.sn',
+            'passwd' => Hash::make('admin@221'),
+            'email_verified_at' => now(),
+        ]
+    );
+    return response()->json(['message' => 'Admin créé avec succès (adapté au schéma)']);
 });
-
 
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
