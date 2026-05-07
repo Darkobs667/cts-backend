@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     zip \
     unzip \
-    && docker-php-ext-install pdo pdo_mysql mbstring zip
+    && docker-php-ext-install pdo_mysql pdo_pgsql mbstring zip
 
 # Activer mod_rewrite pour Apache
 RUN a2enmod rewrite
