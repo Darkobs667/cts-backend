@@ -22,19 +22,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/refresh', [AuthController::class, 'refresh']);
 
-Route::get('/setup-admin', function () {
-    DB::table('users')->updateOrInsert(
-        ['email' => 'admin@uadb.edu.sn'],
-        [
-            'first_name' => 'Admin',
-            'last_name' => 'CTS',
-            'email' => 'admin@uadb.edu.sn',
-            'passwd' => Hash::make('admin@221'),
-            'email_verified_at' => now(),
-        ]
-    );
-    return response()->json(['message' => 'Admin créé avec succès (adapté au schéma)']);
-});
+
 
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
