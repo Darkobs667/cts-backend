@@ -27,6 +27,43 @@ Route::get('/check-users', function () {
     return response()->json($users);
 });
 
+
+
+/********** Routes de debug temporaire **********/
+Route::get('/debug-storage', function () {
+    $files = [];
+    $storagePath = storage_path('app/public/candidates');
+    
+    if (file_exists($storagePath)) {
+        $files = scandir($storagePath);
+    }
+    
+    return response()->json([
+        'storage_linked' => is_link(public_path('storage')),
+        'files_exist' => file_exists($storagePath),
+        'files' => $files,
+        'public_path' => public_path(),
+        'storage_path' => $storagePath
+    ]);
+});
+
+/********** Routes de debug temporaire 2 **********/
+Route::get('/check-storage', function () {
+    $publicStorageExists = file_exists(public_path('storage'));
+    $storageLinkExists = is_link(public_path('storage'));
+    $candidateFiles = [];
+    
+    if (file_exists(storage_path('app/public/candidates'))) {
+        $candidateFiles = array_diff(scandir(storage_path('app/public/candidates')), ['.', '..']);
+    }
+    
+    return response()->json([
+        'public_storage_exists' => $publicStorageExists,
+        'storage_link_exists' => $storageLinkExists,
+        'candidate_files' => $candidateFiles
+    ]);
+});
+
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
 

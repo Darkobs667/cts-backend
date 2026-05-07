@@ -24,6 +24,7 @@ WORKDIR /var/www/html
 
 # Copier les fichiers du projet
 COPY . .
+RUN php artisan storage:link
 
 
 # Installer les dépendances PHP

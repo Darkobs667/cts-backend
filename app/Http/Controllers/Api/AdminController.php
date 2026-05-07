@@ -35,7 +35,7 @@ class AdminController extends Controller
                     'totalInscrits' => $totalInscrits,
                     'votesClotures' => $votesClotures,
                     'votesEnCours'  => $votesEnCours,
-                    'participation' => $participation . '%'
+                    'participation' => $participation
                 ]
             ], 200);
 
