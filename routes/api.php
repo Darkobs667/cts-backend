@@ -47,6 +47,17 @@ Route::get('/debug-storage', function () {
     ]);
 });
 
+/**********Route de surveillance du Corn_job **********/
+Route::get('/cron-status', function () {
+    $lastCalled = Cache::get('last_cron_call');
+    
+    return response()->json([
+        'last_keep_alive' => $lastCalled,
+        'is_awake' => $lastCalled && now()->diffInMinutes($lastCalled) < 15,
+        'next_scheduled' => now()->addMinutes(10)
+    ]);
+});
+
 /********** Routes de debug temporaire 2 **********/
 Route::get('/check-storage', function () {
     $publicStorageExists = file_exists(public_path('storage'));
@@ -63,6 +74,14 @@ Route::get('/check-storage', function () {
         'candidate_files' => $candidateFiles
     ]);
 });
+/********** Routes pour empecher le backend sur render de s'endormir apres 15 min d'inactivité **********/
+Route::get('/keep-alive', function () {
+    return response()->json([
+        'status' => 'awake',
+        'time' => now()->toIso8601String(),
+        'message' => 'Backend is alive and well'
+    ]);
+})->middleware('throttle:10,1'); // Max 10 requêtes par minute (sécurité)
 
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
