@@ -75,13 +75,9 @@ Route::get('/check-storage', function () {
     ]);
 });
 /********** Routes pour empecher le backend sur render de s'endormir apres 15 min d'inactivité **********/
-Route::get('/keep-alive', function () {
-    return response()->json([
-        'status' => 'awake',
-        'time' => now()->toIso8601String(),
-        'message' => 'Backend is alive and well'
-    ]);
-})->middleware('throttle:10,1'); // Max 10 requêtes par minute (sécurité)
+Route::match(['GET', 'HEAD'], '/keep-alive', function () {
+    return response('', 200);
+}); // Max 10 requêtes par minute (sécurité)
 
   // Nouvelle route pour les statistiques :
    Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
