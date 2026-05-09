@@ -23,13 +23,31 @@ class PositionController extends Controller
      * Liste tous les postes (Accessible à tous les authentifiés)
      */
     public function index(): JsonResponse
-    {
+{
+    try {
         $positions = $this->positionService->getAll();
+        
+        // Vérifier si la réponse est valide
+        if (!$positions) {
+            $positions = collect([]);
+        }
+        
         return response()->json([
             'success' => true,
             'data' => $positions
         ]);
+    } catch (\Exception $e) {
+        // Log l'erreur pour debug
+        \Log::error('Erreur dans PositionController@index: ' . $e->getMessage());
+        
+        // Retourner un tableau vide au lieu d'une erreur
+        return response()->json([
+            'success' => true,
+            'data' => collect([]),
+            'debug_message' => $e->getMessage() // Temporaire, à retirer ensuite
+        ]);
     }
+}
 
     /**
      * Créer un nouveau poste (Admin uniquement)

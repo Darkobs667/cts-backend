@@ -2,12 +2,8 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-Route::get('/ping', function () {
-    return response()->json(['message' => 'pong']);
-});
-
-
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Api\PositionController;
@@ -15,42 +11,83 @@ use App\Http\Controllers\Api\CandidateController;
 use App\Http\Controllers\Api\VoteController;
 use App\Http\Controllers\Api\UserController;
 
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
 
+// =============================================
+// ROUTES PUBLIQUES (Accessibles sans authentification)
+// =============================================
 
-/********** Routes d'authentification **********/
+// Test
+Route::get('/ping', function () {
+    return response()->json(['message' => 'pong']);
+});
+
+// Authentification
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/refresh', [AuthController::class, 'refresh']);
 
+// Consultation publique
+Route::get('/positions', [PositionController::class, 'index']);
+Route::get('/candidates', [CandidateController::class, 'index']);
+Route::get('/admin/stats-globales', [AdminController::class, 'getStats']);
+Route::get('/votes/results', [VoteController::class, 'results']);
+
+// Keep-alive pour Render (évite la mise en veille)
+Route::match(['GET', 'HEAD'], '/keep-alive', function () {
+    return response('', 200);
+});
+
+// Routes de debug (à retirer en production)
 Route::get('/check-users', function () {
     $users = DB::table('users')->select('email', 'first_name', 'last_name')->get();
     return response()->json($users);
 });
 
-
-
-/********** Routes de debug temporaire **********/
-Route::get('/debug-storage', function () {
-    $files = [];
-    $storagePath = storage_path('app/public/candidates');
-    
-    if (file_exists($storagePath)) {
-        $files = scandir($storagePath);
+Route::get('/debug-positions', function () {
+    try {
+        $positions = \App\Models\Position::with('candidates')->get();
+        return response()->json([
+            'success' => true,
+            'count' => $positions->count(),
+            'data' => $positions
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage()
+        ], 500);
     }
-    
+});
+
+Route::get('/debug-storage', function () {
+    $storagePath = storage_path('app/public/candidates');
     return response()->json([
         'storage_linked' => is_link(public_path('storage')),
         'files_exist' => file_exists($storagePath),
-        'files' => $files,
-        'public_path' => public_path(),
+        'files' => file_exists($storagePath) ? scandir($storagePath) : [],
         'storage_path' => $storagePath
     ]);
 });
 
-/**********Route de surveillance du Corn_job **********/
+Route::get('/check-storage', function () {
+    $candidateFiles = [];
+    if (file_exists(storage_path('app/public/candidates'))) {
+        $candidateFiles = array_diff(scandir(storage_path('app/public/candidates')), ['.', '..']);
+    }
+    return response()->json([
+        'public_storage_exists' => file_exists(public_path('storage')),
+        'storage_link_exists' => is_link(public_path('storage')),
+        'candidate_files' => $candidateFiles
+    ]);
+});
+
 Route::get('/cron-status', function () {
     $lastCalled = Cache::get('last_cron_call');
-    
     return response()->json([
         'last_keep_alive' => $lastCalled,
         'is_awake' => $lastCalled && now()->diffInMinutes($lastCalled) < 15,
@@ -58,65 +95,38 @@ Route::get('/cron-status', function () {
     ]);
 });
 
-/********** Routes de debug temporaire 2 **********/
-Route::get('/check-storage', function () {
-    $publicStorageExists = file_exists(public_path('storage'));
-    $storageLinkExists = is_link(public_path('storage'));
-    $candidateFiles = [];
-    
-    if (file_exists(storage_path('app/public/candidates'))) {
-        $candidateFiles = array_diff(scandir(storage_path('app/public/candidates')), ['.', '..']);
-    }
-    
-    return response()->json([
-        'public_storage_exists' => $publicStorageExists,
-        'storage_link_exists' => $storageLinkExists,
-        'candidate_files' => $candidateFiles
-    ]);
-});
-/********** Routes pour empecher le backend sur render de s'endormir apres 15 min d'inactivité **********/
-Route::match(['GET', 'HEAD'], '/keep-alive', function () {
-    return response('', 200);
-}); // Max 10 requêtes par minute (sécurité)
+// =============================================
+// ROUTES PROTÉGÉES PAR JWT (Authentification requise)
+// =============================================
 
-  // Nouvelle route pour les statistiques :
-   Route::get('/admin/stats-globales', [App\Http\Controllers\Api\AdminController::class, 'getStats']);
-
-   Route::get('/votes/my', [VoteController::class, 'myVotes']);
-
-   Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt']);
-
-/********** Routes protégées par JWT **********/
 Route::middleware('auth:api')->group(function () {
-    // Positions
-    Route::get('/positions', [PositionController::class, 'index']);
-    Route::get('/users', [UserController::class, 'index'])->middleware('admin');
+    
+    // Positions (admin uniquement pour écriture)
     Route::post('/positions', [PositionController::class, 'store'])->middleware('admin');
     Route::put('/positions/{id}', [PositionController::class, 'update'])->middleware('admin');
     Route::delete('/positions/{id}', [PositionController::class, 'destroy'])->middleware('admin');
     Route::get('/positions/{id}', [PositionController::class, 'show']);
-
-    //ACCEPTER OU REFUSER UNE candidature
-    Route::put('/candidates/{id}/approve', [CandidateController::class, 'approve'])->middleware('admin');
-Route::put('/candidates/{id}/reject', [CandidateController::class, 'reject'])->middleware('admin');
-Route::post('/apply', [CandidateController::class, 'apply']);
-
-//reinitialisation de mot de passe d'un utilisateur  par admin
-Route::put('/users/{id}/reset-password', [UserController::class, 'resetPassword'])->middleware('admin');
-
-//pour supprimer un utilisateur 
-Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware('admin');
     
     // Candidats
-    Route::get('/candidates', [CandidateController::class, 'index']);
     Route::post('/candidates', [CandidateController::class, 'store'])->middleware('admin');
     Route::put('/candidates/{id}', [CandidateController::class, 'update'])->middleware('admin');
     Route::delete('/candidates/{id}', [CandidateController::class, 'destroy'])->middleware('admin');
     Route::get('/candidates/{id}', [CandidateController::class, 'show']);
-
+    
+    // Approbation/refus des candidatures (admin)
+    Route::put('/candidates/{id}/approve', [CandidateController::class, 'approve'])->middleware('admin');
+    Route::put('/candidates/{id}/reject', [CandidateController::class, 'reject'])->middleware('admin');
+    
+    // Postuler (utilisateur connecté)
+    Route::post('/apply', [CandidateController::class, 'apply']);
+    
+    // Utilisateurs (admin)
+    Route::get('/users', [UserController::class, 'index'])->middleware('admin');
+    Route::put('/users/{id}/reset-password', [UserController::class, 'resetPassword'])->middleware('admin');
+    Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware('admin');
+    
     // Votes
     Route::post('/votes', [VoteController::class, 'store']);
-    Route::get('/votes/results', [VoteController::class, 'results']);
-
-  
+    Route::get('/votes/my', [VoteController::class, 'myVotes']);
+    Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt']);
 });
