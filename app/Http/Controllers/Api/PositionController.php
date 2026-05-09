@@ -8,11 +8,14 @@ use App\Services\PositionService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use App\Traits\Cacheable;
 
 
 class PositionController extends Controller
 {
+      use Cacheable;  // ← utilisation du cache
     protected $positionService;
+    protected $cacheTtl = 300;  // ←  (5 minutes)
 
     public function __construct(PositionService $positionService)
     {
@@ -24,29 +27,17 @@ class PositionController extends Controller
      */
     public function index(): JsonResponse
 {
-    try {
+    $positions = $this->rememberCache('positions_list', function () {
         $positions = $this->positionService->getAll();
         
-        // Vérifier si la réponse est valide
-        if (!$positions) {
-            $positions = collect([]);
-        }
-        
-        return response()->json([
-            'success' => true,
-            'data' => $positions
-        ]);
-    } catch (\Exception $e) {
-        // Log l'erreur pour debug
-        \Log::error('Erreur dans PositionController@index: ' . $e->getMessage());
-        
-        // Retourner un tableau vide au lieu d'une erreur
-        return response()->json([
-            'success' => true,
-            'data' => collect([]),
-            'debug_message' => $e->getMessage() // Temporaire, à retirer ensuite
-        ]);
-    }
+        // Convertir les objets en array pour éviter les problèmes de sérialisation
+        return json_decode(json_encode($positions), true);
+    }, $this->cacheTtl);
+
+    return response()->json([
+        'success' => true,
+        'data' => $positions
+    ]);
 }
 
     /**

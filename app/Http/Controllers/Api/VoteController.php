@@ -9,11 +9,14 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf; // Si tu utilises le package dompdf (composer require barryvdh/laravel-dompdf)
+use Barryvdh\DomPDF\Facade\Pdf; 
+use App\Traits\Cacheable;
 
 class VoteController extends Controller
 {
+    use Cacheable;
     protected $voteService;
+    protected $resultsCacheTtl = 120; // 2 minutes
 
     public function __construct(VoteService $voteService)
     {
@@ -74,22 +77,31 @@ class VoteController extends Controller
     /**
      * Voir les résultats globaux des votes
      */
-    public function results(): JsonResponse
-    {
-        try {
-            $results = $this->voteService->getResults();
-            return response()->json([
-                'success' => true,
-                'data' => $results
-            ]);
-        } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+     public function results(Request $request): JsonResponse
+{
+    $positionId = $request->get('position_id', 'all');
+    $cacheKey = "vote_results_{$positionId}";
+    
+    $results = $this->rememberCache($cacheKey, function () use ($positionId) {
+        if ($positionId !== 'all') {
+            $data = $this->voteService->getResults($positionId);
+        } else {
+            $data = $this->voteService->getResults();
         }
-    }
+        
+        // Convertir en array pour éviter les problèmes de sérialisation
+        return json_decode(json_encode($data), true);
+    }, $this->resultsCacheTtl);
+
+    return response()->json([
+        'success' => true,
+        'data' => $results
+    ]);
+}
 
     /**
      * Récupérer les IDs des postes pour lesquels l'utilisateur a déjà voté
-     * Utile pour griser les boutons de vote côté Frontend (Svelte)
+     * Utile pour griser les boutons de vote côté Frontend 
      */
     
 

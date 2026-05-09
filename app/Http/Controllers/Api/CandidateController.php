@@ -8,10 +8,13 @@ use App\Services\CandidatService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
+use App\Traits\Cacheable;
 
 class CandidateController extends Controller
 {
+    use Cacheable;  // ← AJOUTE DE CACHE
     protected $candidatService;
+     protected $cacheTtl = 300;  // ←  (5 minutes)
 
     public function __construct(CandidatService $candidatService)
     {
@@ -23,25 +26,31 @@ class CandidateController extends Controller
      */
     public function index(Request $request): JsonResponse
 {
-    $query = Candidate::with('user', 'position');
+    // Construction d'une clé de cache unique basée sur les paramètres
+    $positionId = $request->get('position_id', 'all');
+    $status = $request->get('status', 'all');
+    $cacheKey = "candidates_list_pos_{$positionId}_status_{$status}";
+    
+    $candidates = $this->rememberCache($cacheKey, function () use ($request) {
+        $query = Candidate::with('user', 'position');
 
-    if ($request->has('position_id')) {
-        $query->where('position_id', $request->position_id);
-    }
+        if ($request->has('position_id')) {
+            $query->where('position_id', $request->position_id);
+        }
 
-    // Nouveau : filtrer par statut (en_attente, valide, refuse)
-    if ($request->has('status')) {
-        $query->where('status', $request->status);
-    }
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
 
-    $candidates = $query->get();
+        // Convertir en array pour éviter les problèmes de sérialisation
+        return $query->get()->toArray();
+    }, $this->cacheTtl);
 
     return response()->json([
         'success' => true,
         'data' => $candidates,
     ]);
 }
-
 
     /**
      * Créer une nouvelle candidature (Admin seulement)
