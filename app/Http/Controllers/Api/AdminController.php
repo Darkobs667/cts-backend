@@ -6,44 +6,40 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Position;
 use App\Models\Vote;
+use App\Traits\Cacheable;  // ← AJOUT
 use Illuminate\Http\JsonResponse;
 
 class AdminController extends Controller
 {
+    use Cacheable;  // ← AJOUT
+
+    protected $statsCacheTtl = 300;  // ← AJOUT (5 minutes)
+
     public function getStats(): JsonResponse
-{
-    try {
-        // 1. Nombre total d'électeurs
-        $totalInscrits = User::where('role', 'electeur')->count();
+    {
+        // ← MODIFIÉ : Mise en cache des statistiques
+        $stats = $this->rememberCache('admin_global_stats', function () {
+            $totalInscrits = User::where('role', 'electeur')->count();
+            $votesEnCours = Position::where('is_active', 1)->count();
+            $votesClotures = Position::where('is_active', 0)->count();
+            $totalVotesUnique = Vote::distinct('hash_session')->count('hash_session');
+            
+            $participation = $totalInscrits > 0 
+                ? round(($totalVotesUnique / $totalInscrits) * 100) 
+                : 0;
 
-        // 2. Statistiques des scrutins
-        $votesEnCours = Position::where('is_active', 1)->count();
-        $votesClotures = Position::where('is_active', 0)->count();
-
-        // 3. Calcul de la participation
-        // Utilise hash_session (qui identifie chaque votant unique) au lieu de user_id
-        $totalVotesUnique = Vote::distinct('hash_session')->count('hash_session');
-        
-        $participation = $totalInscrits > 0 
-            ? round(($totalVotesUnique / $totalInscrits) * 100) 
-            : 0;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Statistiques récupérées',
-            'data' => [
+            return [
                 'totalInscrits' => $totalInscrits,
                 'votesClotures' => $votesClotures,
                 'votesEnCours'  => $votesEnCours,
                 'participation' => $participation
-            ]
-        ], 200);
+            ];
+        }, $this->statsCacheTtl);
 
-    } catch (\Exception $e) {
         return response()->json([
-            'success' => false,
-            'message' => 'Erreur technique : ' . $e->getMessage()
-        ], 500);
+            'success' => true,
+            'message' => 'Statistiques récupérées',
+            'data' => $stats
+        ]);
     }
-}
 }
