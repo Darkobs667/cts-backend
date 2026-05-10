@@ -13,9 +13,9 @@ use App\Traits\Cacheable;
 
 class PositionController extends Controller
 {
-      use Cacheable;  // ← utilisation du cache
+    use Cacheable;  // ← utilisation du cache
     protected $positionService;
-    protected $cacheTtl = 300;  // ←  (5 minutes)
+    protected $cacheTtl = 300;  // ← (5 minutes)
 
     public function __construct(PositionService $positionService)
     {
@@ -26,19 +26,19 @@ class PositionController extends Controller
      * Liste tous les postes (Accessible à tous les authentifiés)
      */
     public function index(): JsonResponse
-{
-    $positions = $this->rememberCache('positions_list', function () {
-        $positions = $this->positionService->getAll();
-        
-        // Convertir les objets en array pour éviter les problèmes de sérialisation
-        return json_decode(json_encode($positions), true);
-    }, $this->cacheTtl);
+    {
+        $positions = $this->rememberCache('positions_list', function () {
+            $positions = $this->positionService->getAll();
+            
+            // Convertir les objets en array pour éviter les problèmes de sérialisation
+            return json_decode(json_encode($positions), true);
+        }, $this->cacheTtl);
 
-    return response()->json([
-        'success' => true,
-        'data' => $positions
-    ]);
-}
+        return response()->json([
+            'success' => true,
+            'data' => $positions
+        ]);
+    }
 
     /**
      * Créer un nouveau poste (Admin uniquement)
@@ -57,6 +57,10 @@ class PositionController extends Controller
 
         try {
             $position = $this->positionService->create($request->all());
+            
+            // ← VIDER LE CACHE APRÈS CRÉATION
+            $this->forgetCache('positions_list');
+            
             return response()->json([
                 'message' => 'Poste créé avec succès',
                 'data' => $position
@@ -69,32 +73,36 @@ class PositionController extends Controller
     /**
      * Mettre à jour un poste (Admin uniquement)
      */
- public function update(Request $request, $id)
-{
-    $position = Position::findOrFail($id);
+    public function update(Request $request, $id)
+    {
+        $position = Position::findOrFail($id);
 
-    $data = $request->only('title', 'description', 'is_active');
+        $data = $request->only('title', 'description', 'is_active');
 
-    // Si on active le scrutin et qu'il n'a pas encore de date de début, on l'enregistre
-    if (isset($data['is_active']) && $data['is_active'] == true && !$position->started_at) {
-        $data['started_at'] = now();
+        // Si on active le scrutin et qu'il n'a pas encore de date de début, on l'enregistre
+        if (isset($data['is_active']) && $data['is_active'] == true && !$position->started_at) {
+            $data['started_at'] = now();
+        }
+
+        // Si on désactive, on efface started_at (pour un éventuel prochain démarrage)
+        if (isset($data['is_active']) && $data['is_active'] == false) {
+            $data['started_at'] = null;
+        }
+
+        $result = $this->positionService->update($position, $data);
+
+        if ($result) {
+            // ← VIDER LE CACHE APRÈS MODIFICATION
+            $this->forgetCache('positions_list');
+            $this->forgetCache("position_{$id}");
+            
+            return response()->json([
+                'message' => 'Poste mis à jour avec succès',
+                'data' => $position->fresh()
+            ]);
+        }
+        return response()->json(['message' => 'Erreur lors de la mise à jour'], 500);
     }
-
-    // Si on désactive, on efface started_at (pour un éventuel prochain démarrage)
-    if (isset($data['is_active']) && $data['is_active'] == false) {
-        $data['started_at'] = null;
-    }
-
-    $result = $this->positionService->update($position, $data);
-
-    if ($result) {
-        return response()->json([
-            'message' => 'Poste mis à jour avec succès',
-            'data' => $position->fresh()
-        ]);
-    }
-    return response()->json(['message' => 'Erreur lors de la mise à jour'], 500);
-}
 
     /**
      * Activer ou désactiver un poste (Admin uniquement)
@@ -104,6 +112,11 @@ class PositionController extends Controller
         try {
             $this->positionService->toggleStatus($position);
             $status = $position->is_active ? 'activé' : 'désactivé';
+            
+            // ← VIDER LE CACHE APRÈS ACTIVATION/DÉSACTIVATION
+            $this->forgetCache('positions_list');
+            $this->forgetCache("position_{$position->id}");
+            
             return response()->json(['message' => "Le poste est désormais $status"]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 403);
@@ -114,23 +127,30 @@ class PositionController extends Controller
      * Supprimer un poste (Admin uniquement)
      */
     public function destroy($id)
-{
-    $position = Position::findOrFail($id);
-    $result = $this->positionService->delete($position);
+    {
+        $position = Position::findOrFail($id);
+        $result = $this->positionService->delete($position);
 
-    if ($result) {
-        return response()->json(['message' => 'Poste supprimé avec succès']);
+        if ($result) {
+            // ← VIDER LE CACHE APRÈS SUPPRESSION
+            $this->forgetCache('positions_list');
+            $this->forgetCache("position_{$id}");
+            
+            return response()->json(['message' => 'Poste supprimé avec succès']);
+        }
+
+        return response()->json(['message' => 'Erreur lors de la suppression'], 500);
     }
-
-    return response()->json(['message' => 'Erreur lors de la suppression'], 500);
-}
 
     /**
      * Liste des postes actifs pour les électeurs
      */
     public function activePositions(): JsonResponse
     {
-        $positions = $this->positionService->getActivePositions();
+        $positions = $this->rememberCache('positions_active_list', function () {
+            return $this->positionService->getActivePositions();
+        }, $this->cacheTtl);
+
         return response()->json(['data' => $positions]);
     }
 }
