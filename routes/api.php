@@ -26,6 +26,11 @@ Route::get('/ping', function () {
     return response()->json(['message' => 'pong']);
 });
 
+Route::get('/refresh-all-cache', function () {
+    Cache::flush();
+    return response()->json(['message' => 'Cache vidé']);
+});
+
 // Authentification
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);

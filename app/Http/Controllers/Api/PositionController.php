@@ -96,6 +96,11 @@ class PositionController extends Controller
             $this->forgetCache('positions_list');
             $this->forgetCache("position_{$id}");
             
+            // ← AJOUT : VIDER LES CACHES DES RÉSULTATS ET STATS
+            $this->forgetCache('vote_results_all');
+            $this->forgetCache('vote_results_' . $id);
+            $this->forgetCache('admin_global_stats');
+            
             return response()->json([
                 'message' => 'Poste mis à jour avec succès',
                 'data' => $position->fresh()
@@ -117,6 +122,11 @@ class PositionController extends Controller
             $this->forgetCache('positions_list');
             $this->forgetCache("position_{$position->id}");
             
+            // ← AJOUT : VIDER LES CACHES DES RÉSULTATS ET STATS
+            $this->forgetCache('vote_results_all');
+            $this->forgetCache('vote_results_' . $position->id);
+            $this->forgetCache('admin_global_stats');
+            
             return response()->json(['message' => "Le poste est désormais $status"]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 403);
@@ -135,6 +145,11 @@ class PositionController extends Controller
             // ← VIDER LE CACHE APRÈS SUPPRESSION
             $this->forgetCache('positions_list');
             $this->forgetCache("position_{$id}");
+            
+            // ← AJOUT : VIDER LES CACHES DES RÉSULTATS ET STATS
+            $this->forgetCache('vote_results_all');
+            $this->forgetCache('vote_results_' . $id);
+            $this->forgetCache('admin_global_stats');
             
             return response()->json(['message' => 'Poste supprimé avec succès']);
         }
