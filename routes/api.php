@@ -21,6 +21,10 @@ use App\Http\Controllers\Api\UserController;
 // ROUTES PUBLIQUES (Accessibles sans authentification)
 // =============================================
 
+// ROUTES pour avoir toutes les resultats (Accessibles sans authentification)
+Route::get('/votes/results/all', [VoteController::class, 'allResults']);
+Route::get('/votes/results/pdf', [VoteController::class, 'exportPDF']);
+
 // Test
 Route::get('/ping', function () {
     return response()->json(['message' => 'pong']);
@@ -134,4 +138,5 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/votes', [VoteController::class, 'store']);
     Route::get('/votes/my', [VoteController::class, 'myVotes']);
     Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt']);
+    
 });

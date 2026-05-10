@@ -29,18 +29,27 @@ class AuthController extends Controller
             'code'       => 'nullable|string|unique:users,code',
             'email'      => 'required|string|email|max:255|unique:users,email',
             'password'   => 'required|string|min:8|confirmed',
+            'browserId' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+        
 
         try {
             $result = $this->authService->register($request->all());
+            if(isset($result['errors'])){
+                    return response()->json([
+                        'error' => $result['errors'],
+                    ],'401');
+            }else{
             return response()->json([
                 'message' => 'Utilisateur créé avec succès',
-                'data' => $result
+                'data' => $result,
+                
             ], 201);
+            }
         } catch (\Exception $e) {
             //return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
             // On garde 500 car 22000 n'est pas un code HTTP valide

@@ -11,6 +11,14 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf; 
 use App\Traits\Cacheable;
+use App\Models\Position;
+use App\Models\User;
+use Illuminate\Support\Facades\Log; // pour les logs
+use App\Models\Candidate;
+
+
+
+
 
 class VoteController extends Controller
 {
@@ -161,4 +169,91 @@ class VoteController extends Controller
 
         return $pdf->download('Recu_Vote_' . $vote->id . '.pdf');
     }
+
+    public function allResults(): JsonResponse
+{
+    try {
+        $positions = Position::all();
+        $all = [];
+
+        foreach ($positions as $position) {
+            $totalVotes = Vote::where('position_id', $position->id)->count();
+            $candidates = Candidate::where('position_id', $position->id)->get();
+
+            $candidatesData = [];
+            foreach ($candidates as $candidate) {
+                $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
+
+                // Récupérer l'utilisateur lié au candidat
+                $user = User::find($candidate->user_id);
+                $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
+
+                $candidatesData[] = [
+                    'id'          => $candidate->id,
+                    'name'        => $fullName,
+                    'photo_path'  => $candidate->photo_path,
+                    'votes_count' => $candidateVotes,
+                ];
+            }
+
+            // Trier par votes décroissants
+            usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+
+            $all[] = [
+                'id'          => $position->id,
+                'title'       => $position->title,
+                'is_active'   => (bool) $position->is_active,
+                'total_votes' => $totalVotes,
+                'candidates'  => $candidatesData,
+            ];
+        }
+
+        return response()->json(['success' => true, 'data' => $all]);
+
+    } catch (\Exception $e) {
+        Log::error('Erreur dans allResults : ' . $e->getMessage());
+        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+    }
+}
+
+public function exportPDF()
+{
+    // Récupérer tous les scrutins avec leurs candidats et votes
+    $positions = Position::all();
+    $data = [];
+
+    foreach ($positions as $position) {
+        $totalVotes = Vote::where('position_id', $position->id)->count();
+        $candidates = Candidate::where('position_id', $position->id)->get();
+        $candidatesData = [];
+
+        foreach ($candidates as $candidate) {
+            $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
+            $user = User::find($candidate->user_id);
+            $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
+            $candidatesData[] = [
+                'name'        => $fullName,
+                'votes_count' => $candidateVotes,
+            ];
+        }
+
+        // Trier par votes décroissants
+        usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+
+        $data[] = [
+            'title'       => $position->title,
+            'is_active'   => $position->is_active,
+            'total_votes' => $totalVotes,
+            'candidates'  => $candidatesData,
+        ];
+    }
+
+    $pdfData = [
+        'elections'    => $data,
+        'generated_at' => now()->format('d/m/Y H:i:s'),
+    ];
+
+    $pdf = Pdf::loadView('pdf.results', $pdfData);
+    return $pdf->download('resultats_scrutins.pdf');
+}
 }

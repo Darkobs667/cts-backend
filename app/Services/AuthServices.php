@@ -21,14 +21,17 @@ class AuthServices
     public function register(array $data): array
     {
         // 
+        if(User::where('browserId',$data['browserId'])->exists()){
+            return ['errors' => 'Vous deja un compte sur cette appareil,vous ne pouvez pas cree deux compte '];
+        }
 
         // Check if email already exists
         if (User::where('email', $data['email'])->exists()) {
-            throw new \Exception('Email already exists', 409);
+            return ['errors' => 'Email already exists'];
         }
         // check password
         if (strlen($data['password']) < 8) {
-            throw new \Exception('Password must be at least 8 characters', 422);
+            return ['errors' => 'Password must be at least 8 characters'];
         }
         DB::beginTransaction();
   
@@ -38,6 +41,7 @@ class AuthServices
                 'last_name' => $data['last_name'],
                 'code' => $data['code'],
                 'email' => $data['email'],
+                'browserId'=>$data['browserId'],
                 'password' => Hash::make($data['password']),
             ]);
 
