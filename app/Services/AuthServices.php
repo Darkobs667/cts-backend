@@ -22,7 +22,7 @@ class AuthServices
     {
         // 
         if(User::where('browserId',$data['browserId'])->exists()){
-            return ['errors' => 'Vous deja un compte sur cette appareil,vous ne pouvez pas cree deux compte '];
+            return ['errors' => 'Vous avez deja creer un compte sur cette appareil, vous ne pouvez pas en creer un autre'];
         }
 
         // Check if email already exists
