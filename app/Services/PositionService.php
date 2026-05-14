@@ -20,7 +20,7 @@ class PositionService
 
     public function getAll(): Collection
     {
-        return Position::with(['candidates.user'])->get();
+        return Position::all();
     }
 
     public function update(Position $position, array $data): bool

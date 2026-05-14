@@ -25,6 +25,8 @@ Route::get('/cron/close-expired', function () {
     return response()->json(['closed' => $count]);
 });
 
+Route::get('/receipts/{ref}', [VoteController::class, 'publicReceipt']);
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login',    [AuthController::class, 'login']);
 
@@ -44,7 +46,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
 
-    Route::get('/admin/stats-globales', [AdminController::class, 'getStats'])->middleware('admin');
+    Route::get('/admin/stats-globales',           [AdminController::class, 'getStats'])->middleware('admin');
+    Route::get('/admin/participation-by-position', [AdminController::class, 'getParticipationByPosition'])->middleware('admin');
+    Route::get('/admin/expiring-positions',        [AdminController::class, 'getExpiringPositions'])->middleware('admin');
+    Route::patch('/admin/positions/{id}/toggle',   [AdminController::class, 'togglePosition'])->middleware('admin');
 
     Route::get('/votes/results/all', [VoteController::class, 'allResults'])->middleware('admin');
     Route::get('/votes/results/pdf', [VoteController::class, 'exportPDF'])->middleware('admin');

@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Validator;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\Cacheable;
 use App\Models\Position;
-use App\Models\User;
 use Illuminate\Support\Facades\Log;
 use App\Models\Candidate;
 use App\Services\AuthServices;
@@ -108,7 +107,7 @@ class VoteController extends Controller
                         if ($vote->candidate) {
                             $candidateUser = $vote->candidate->user;
                             $candidateName = $candidateUser ? ($candidateUser->first_name . ' ' . $candidateUser->last_name) : 'Candidat';
-                            $photoPath = $vote->candidate->photo_path ? asset('storage/' . $vote->candidate->photo_path) : null;
+                            $photoPath = $vote->candidate->photo_path ?: null;
                         }
                         
                         return [
@@ -149,17 +148,17 @@ class VoteController extends Controller
         if ($candidate) {
             $candidateUser = $candidate->user;
             $candidateName = ($candidateUser ? $candidateUser->first_name . ' ' . $candidateUser->last_name : 'Candidat');
-            $photoPath = $candidate->photo_path ? asset('storage/' . $candidate->photo_path) : null;
+            // photo_path est une data URI base64 — DomPDF la supporte nativement
+            $photoPath = $candidate->photo_path ?: null;
         }
 
-        // Génération d'un PDF amélioré avec les informations du vote
         $data = [
-            'election' => $vote->position->title ?? 'Scrutin inconnu',
-            'date'     => $vote->created_at->format('d/m/Y à H:i'),
-            'ref'      => 'CTS-' . strtoupper(substr(md5($vote->id), 0, 8)),
-            'electeur' => $user->first_name . ' ' . $user->last_name,
+            'election'      => $vote->position->title ?? 'Scrutin inconnu',
+            'date'          => $vote->created_at->format('d/m/Y à H:i'),
+            'ref'           => 'CTS-' . strtoupper(substr(md5($vote->id), 0, 8)),
+            'electeur'      => $user->first_name . ' ' . $user->last_name,
             'candidat_name' => $candidateName,
-            'photo_path' => $photoPath,
+            'photo_path'    => $photoPath,
         ];
 
         $pdf = Pdf::loadView('pdf.receipt', $data);
@@ -170,53 +169,73 @@ class VoteController extends Controller
     public function allResults(): JsonResponse
     {
         try {
-            $positions = Position::all();
-            $all = [];
+            $results = $this->rememberCache('vote_results_all', function () {
+                $positions = Position::with(['candidates.user'])->get();
 
-            foreach ($positions as $position) {
-                $onlineTotal = Vote::where('position_id', $position->id)->count();
-                $candidates  = Candidate::where('position_id', $position->id)->get();
-                $hasPhysical = $candidates->sum('physical_votes') > 0;
+                $positionIds = $positions->pluck('id');
 
-                $candidatesData = [];
-                foreach ($candidates as $candidate) {
-                    $onlineVotes   = Vote::where('candidate_id', $candidate->id)->count();
-                    $physicalVotes = (int) $candidate->physical_votes;
-                    $totalVotes    = $onlineVotes + $physicalVotes;
+                // Tous les votes en une seule requête
+                $votesByPosition = Vote::whereIn('position_id', $positionIds)
+                    ->selectRaw('position_id, candidate_id, count(*) as total')
+                    ->groupBy('position_id', 'candidate_id')
+                    ->get()
+                    ->groupBy('position_id');
 
-                    $user     = User::find($candidate->user_id);
-                    $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
+                $all = [];
+                foreach ($positions as $position) {
+                    $posVotes    = $votesByPosition->get($position->id, collect());
+                    $onlineTotal = $posVotes->sum('total');
+                    $candidates  = $position->candidates;
+                    $hasPhysical = $candidates->sum('physical_votes') > 0;
 
-                    $candidatesData[] = [
-                        'id'             => $candidate->id,
-                        'name'           => $fullName,
-                        'photo_path'     => $candidate->photo_path,
-                        'online_votes'   => $onlineVotes,
-                        'physical_votes' => $physicalVotes,
-                        'votes_count'    => $totalVotes,
+                    $candidatesData = $candidates->map(function ($candidate) use ($posVotes) {
+                        $onlineVotes   = $posVotes->firstWhere('candidate_id', $candidate->id)?->total ?? 0;
+                        $physicalVotes = (int) $candidate->physical_votes;
+                        $fullName      = $candidate->user
+                            ? $candidate->user->first_name . ' ' . $candidate->user->last_name
+                            : 'Candidat';
+                        return [
+                            'id'             => $candidate->id,
+                            'name'           => $fullName,
+                            'photo_path'     => $candidate->photo_path, // data URI base64 — exclue du cache
+                            'online_votes'   => $onlineVotes,
+                            'physical_votes' => $physicalVotes,
+                            'votes_count'    => $onlineVotes + $physicalVotes,
+                        ];
+                    })->sortByDesc('votes_count')->values()->toArray();
+
+                    $physicalTotal = array_sum(array_column($candidatesData, 'physical_votes'));
+
+                    $all[] = [
+                        'id'             => $position->id,
+                        'title'          => $position->title,
+                        'is_active'      => (bool) $position->is_active,
+                        'closes_at'      => $position->closes_at,
+                        'quorum'         => $position->quorum,
+                        'quorum_reached' => $position->quorum ? ($onlineTotal + $physicalTotal) >= $position->quorum : null,
+                        'has_physical'   => $hasPhysical,
+                        'online_total'   => $onlineTotal,
+                        'physical_total' => $physicalTotal,
+                        'total_votes'    => $onlineTotal + $physicalTotal,
+                        'candidates'     => $candidatesData,
                     ];
                 }
+                return $all;
+            }, $this->resultsCacheTtl);
 
-                usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+        // Les photos (data URI base64) sont volumineuses — on les charge séparément hors cache
+        $candidateIds = collect($results)->flatMap(fn($p) => collect($p['candidates'])->pluck('id'));
+        $photos = Candidate::whereIn('id', $candidateIds)->pluck('photo_path', 'id');
 
-                $physicalTotal = array_sum(array_column($candidatesData, 'physical_votes'));
+        $results = collect($results)->map(function ($position) use ($photos) {
+            $position['candidates'] = collect($position['candidates'])->map(function ($c) use ($photos) {
+                $c['photo_path'] = $photos[$c['id']] ?? null;
+                return $c;
+            })->toArray();
+            return $position;
+        })->toArray();
 
-                $all[] = [
-                    'id'             => $position->id,
-                    'title'          => $position->title,
-                    'is_active'      => (bool) $position->is_active,
-                    'closes_at'      => $position->closes_at,
-                    'quorum'         => $position->quorum,
-                    'quorum_reached' => $position->quorum ? ($onlineTotal + $physicalTotal) >= $position->quorum : null,
-                    'has_physical'   => $hasPhysical,
-                    'online_total'   => $onlineTotal,
-                    'physical_total' => $physicalTotal,
-                    'total_votes'    => $onlineTotal + $physicalTotal,
-                    'candidates'     => $candidatesData,
-                ];
-            }
-
-            return response()->json(['success' => true, 'data' => $all]);
+        return response()->json(['success' => true, 'data' => $results]);
 
         } catch (\Exception $e) {
             Log::error('Erreur dans allResults : ' . $e->getMessage());

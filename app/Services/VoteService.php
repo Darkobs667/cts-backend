@@ -44,17 +44,30 @@ public function castVote(int $positionId, ?int $candidateId): Vote
      */
     public function getResults(?int $positionId = null): Collection
     {
-        $query = Position::with(['candidates.user']);
+        $query = Position::with(['candidates' => function ($q) {
+            $q->where('status', 'valide')->with('user');
+        }]);
+
         if ($positionId) {
             $query->where('id', $positionId);
         }
 
-        return $query->get()->map(function ($position) {
-            $validCandidates = $position->candidates->where('status', 'valide');
-            $totalVotes = Vote::where('position_id', $position->id)->count();
+        $positions = $query->get();
 
-            $candidates = $validCandidates->map(function ($candidate) use ($totalVotes) {
-                $votes = Vote::where('candidate_id', $candidate->id)->count();
+        // Charger les votes en une seule requête
+        $positionIds = $positions->pluck('id');
+        $votesByPosition = Vote::whereIn('position_id', $positionIds)
+            ->selectRaw('position_id, candidate_id, count(*) as total')
+            ->groupBy('position_id', 'candidate_id')
+            ->get()
+            ->groupBy('position_id');
+
+        return $positions->map(function ($position) use ($votesByPosition) {
+            $posVotes = $votesByPosition->get($position->id, collect());
+            $totalVotes = $posVotes->sum('total');
+
+            $candidates = $position->candidates->map(function ($candidate) use ($posVotes, $totalVotes) {
+                $votes = $posVotes->firstWhere('candidate_id', $candidate->id)?->total ?? 0;
                 $pct   = $totalVotes > 0 ? round(($votes / $totalVotes) * 100, 1) : 0;
                 return [
                     'id'          => $candidate->id,
