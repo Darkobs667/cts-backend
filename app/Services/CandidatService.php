@@ -22,8 +22,16 @@ class CandidatService
             throw new \Exception('Utilisateur non authentifié ou droits insuffisants', 403);
         }
 
+        $exists = Candidate::where('user_id', $data['user_id'])
+            ->where('position_id', $data['position_id'])
+            ->exists();
+
+        if ($exists) {
+            throw new \Exception('Ce candidat est déjà inscrit pour ce poste.', 409);
+        }
+
         return Candidate::create([
-            'user_id'     => $data['user_id'], 
+            'user_id'     => $data['user_id'],
             'position_id' => $data['position_id'],
             'slogan'      => $data['slogan'] ?? null,
             'bio'         => $data['bio'] ?? null,
@@ -102,10 +110,8 @@ class CandidatService
     // Supprimer les votes pour ce candidat
     Vote::where('candidate_id', $candidate->id)->delete();
 
-    // Supprimer la photo si elle existe
-    if ($candidate->photo_path) {
-        \Storage::disk('public')->delete($candidate->photo_path);
-    }
+    // Supprimer la photo Cloudinary si elle existe
+    // (la suppression Cloudinary est gérée dans le controller via CloudinaryService)
 
     return $candidate->delete();
 }

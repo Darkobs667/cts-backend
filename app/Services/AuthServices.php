@@ -31,12 +31,13 @@ class AuthServices
         DB::beginTransaction();
         try {
             User::create([
-                'first_name'       => $data['first_name'],
-                'last_name'        => $data['last_name'],
-                'code'             => $data['code'] ?? null,
-                'email'            => $data['email'],
-                'browserId'        => $data['browserId'],
-                'password'         => Hash::make($data['password']),
+                'first_name'        => $data['first_name'],
+                'last_name'         => $data['last_name'],
+                'code'              => $data['code'] ?? null,
+                'email'             => $data['email'],
+                'browserId'         => $data['browserId'],
+                'password'          => Hash::make($data['password']),
+                'role'              => $data['role'] ?? 'electeur',
                 'email_verified_at' => now(),
             ]);
             DB::commit();

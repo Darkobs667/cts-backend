@@ -17,6 +17,15 @@ use App\Http\Controllers\Api\InviteCodeController;
 Route::get('/ping', fn() => response()->json(['message' => 'pong']));
 Route::match(['GET', 'HEAD'], '/keep-alive', fn() => response('', 200));
 
+// Route pour cron externe (cron-job.org) — clôture automatique des scrutins expirés
+Route::get('/cron/close-expired', function () {
+    $count = \App\Models\Position::where('is_active', true)
+        ->whereNotNull('closes_at')
+        ->where('closes_at', '<=', now())
+        ->update(['is_active' => false]);
+    return response()->json(['closed' => $count]);
+});
+
 Route::middleware('throttle:register')->post('/register', [AuthController::class, 'register']);
 Route::middleware('throttle:login')->post('/login',    [AuthController::class, 'login']);
 

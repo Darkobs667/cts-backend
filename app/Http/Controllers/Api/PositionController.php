@@ -27,6 +27,18 @@ class PositionController extends Controller
      */
     public function index(): JsonResponse
     {
+        // Clôturer les scrutins expirés avant de retourner la liste
+        $closed = Position::where('is_active', true)
+            ->whereNotNull('closes_at')
+            ->where('closes_at', '<=', now())
+            ->update(['is_active' => false]);
+
+        if ($closed > 0) {
+            $this->forgetCache('positions_list');
+            $this->forgetCache('vote_results_all');
+            $this->forgetCache('admin_global_stats');
+        }
+
         $positions = $this->rememberCache('positions_list', function () {
             $positions = $this->positionService->getAll();
             

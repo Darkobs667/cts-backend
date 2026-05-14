@@ -8,8 +8,7 @@ use App\Services\VoteService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Storage;
-use Barryvdh\DomPDF\Facade\Pdf; 
+use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\Cacheable;
 use App\Models\Position;
 use App\Models\User;
@@ -46,33 +45,12 @@ class VoteController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $user = auth('api')->user();
-        if (!$user) {
-            return response()->json(['message' => 'Utilisateur non authentifié'], 401);
-        }
-
-        $voterIdentifier = AuthServices::voterHash($user);
-
-        // Vérification de doublon
-        $existing = Vote::where('position_id', $request->position_id)
-                        ->where('hash_session', $voterIdentifier)
-                        ->first();
-
-        if ($existing) {
-            return response()->json([
-                'message' => 'Vous avez déjà voté pour ce poste.'
-            ], 409);
-        }
-
-        // Insertion manuelle
         try {
-            $vote = Vote::create([
-                'position_id'  => $request->position_id,
-                'candidate_id' => $request->candidate_id,
-                'hash_session' => $voterIdentifier,
-            ]);
+            $vote = $this->voteService->castVote(
+                (int) $request->position_id,
+                $request->candidate_id ? (int) $request->candidate_id : null
+            );
 
-            // ← VIDER LES CACHES APRÈS UN VOTE
             $this->forgetCache('vote_results_all');
             $this->forgetCache('vote_results_' . $request->position_id);
             $this->forgetCache('admin_global_stats');
@@ -84,9 +62,8 @@ class VoteController extends Controller
                 'data'    => $vote,
             ], 201);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-            ], 500);
+            $code = $e->getCode() ?: 500;
+            return response()->json(['message' => $e->getMessage()], $code);
         }
     }
 
