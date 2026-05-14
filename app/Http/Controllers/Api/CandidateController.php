@@ -43,13 +43,19 @@ class CandidateController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'user_id'     => 'required|exists:users,id',
             'position_id' => 'required|exists:positions,id',
             'slogan'      => 'nullable|string',
             'bio'         => 'nullable|string',
             'photo'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
 
         if ($request->hasFile('photo')) {
             $data['photo_path'] = $this->cloudinary->upload($request->file('photo'));
@@ -81,13 +87,19 @@ class CandidateController extends Controller
     {
         $candidate = Candidate::findOrFail($id);
 
-        $data = $request->validate([
+        $validator = Validator::make($request->all(), [
             'user_id'     => 'sometimes|exists:users,id',
             'position_id' => 'sometimes|exists:positions,id',
             'slogan'      => 'nullable|string',
             'bio'         => 'nullable|string',
             'photo'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $data = $validator->validated();
 
         if ($request->hasFile('photo')) {
             if ($candidate->photo_path) {

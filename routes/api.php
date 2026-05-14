@@ -55,7 +55,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/positions/{id}',    [PositionController::class, 'show']);
 
     Route::post('/candidates',             [CandidateController::class, 'store'])->middleware('admin');
-    Route::put('/candidates/{id}',         [CandidateController::class, 'update'])->middleware('admin');
+    Route::post('/candidates/{id}/update',  [CandidateController::class, 'update'])->middleware('admin');
+    Route::put('/candidates/{id}',          [CandidateController::class, 'update'])->middleware('admin');
     Route::delete('/candidates/{id}',      [CandidateController::class, 'destroy'])->middleware('admin');
     Route::get('/candidates/{id}',         [CandidateController::class, 'show']);
     Route::put('/candidates/{id}/approve', [CandidateController::class, 'approve'])->middleware('admin');
