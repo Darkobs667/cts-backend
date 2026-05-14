@@ -12,7 +12,7 @@ return [
     ]),
 
     'allowed_origins_patterns' => [
-        '#^https://cts-frontend.*\.vercel\.app$#',
+        '#^https://.*\.vercel\.app$#',
     ],
 
     'allowed_headers' => ['*'],
