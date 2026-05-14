@@ -18,15 +18,11 @@ class AuthController extends Controller
         $this->authService = $authService;
     }
 
-    /**
-     * Inscription d'un nouvel utilisateur
-     */
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string|max:255',
             'last_name'  => 'required|string|max:255',
-            'code'       => 'nullable|string|unique:users,code',
             'email'      => 'required|string|email|max:255|unique:users,email',
             'password'   => 'required|string|min:8|confirmed',
             'browserId'  => 'required|string',
@@ -35,29 +31,21 @@ class AuthController extends Controller
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
-        
 
         try {
             $result = $this->authService->register($request->all());
             if (isset($result['errors'])) {
-                return response()->json(['error' => $result['errors']], 401);
+                return response()->json(['error' => $result['errors']], 409);
             }
-            return response()->json([
-                'message' => 'Compte créé. Vérifiez votre email pour activer votre compte.',
-            ], 201);
+            return response()->json(['message' => 'Compte créé avec succès.'], 201);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 
-    /**
-     * Connexion de l'utilisateur
-     */
     public function login(Request $request): JsonResponse
     {
-        $credentials = $request->only('email', 'password');
-
-        $validator = Validator::make($credentials, [
+        $validator = Validator::make($request->only('email', 'password'), [
             'email'    => 'required|email',
             'password' => 'required|string',
         ]);
@@ -67,112 +55,49 @@ class AuthController extends Controller
         }
 
         try {
-            $result = $this->authService->login($credentials);
-            return response()->json([
-                'message' => 'Connexion réussie',
-                'data' => $result
-            ], 200);
+            $result = $this->authService->login($request->only('email', 'password'));
+            return response()->json(['message' => 'Connexion réussie', 'data' => $result], 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 401);
         }
     }
 
-    /**
-     * Déconnexion (Invalider le token)
-     */
     public function logout(): JsonResponse
     {
-        $loggedOut = $this->authService->logout();
-
-        if ($loggedOut) {
-            return response()->json(['message' => 'Déconnexion réussie'], 200);
-        }
-
-        return response()->json(['error' => 'Erreur lors de la déconnexion'], 500);
+        return $this->authService->logout()
+            ? response()->json(['message' => 'Déconnexion réussie'], 200)
+            : response()->json(['error' => 'Erreur lors de la déconnexion'], 500);
     }
 
-    /**
-     * Obtenir les informations de l'utilisateur connecté
-     */
     public function me(): JsonResponse
     {
         $user = $this->authService->me();
-
-        if (!$user) {
-            return response()->json(['error' => 'Non autorisé'], 401);
-        }
-
-        return response()->json(['user' => $user], 200);
-    }
-
-    /**
-     * Vérification de l'email via le token reçu par mail
-     */
-    public function verifyEmail(Request $request): JsonResponse
-    {
-        $token = $request->route('token');
-        $verified = $this->authService->verifyEmail($token);
-
-        if (!$verified) {
-            return response()->json(['error' => 'Lien invalide ou déjà utilisé.'], 400);
-        }
-
-        return response()->json(['message' => 'Email vérifié avec succès. Vous pouvez vous connecter.']);
-    }
-
-    public function resendVerification(Request $request): JsonResponse
-    {
-        $request->validate(['email' => 'required|email']);
-
-        $user = \App\Models\User::where('email', $request->email)
-            ->whereNull('email_verified_at')
-            ->first();
-
-        if (!$user) {
-            return response()->json(['message' => 'Email introuvable ou déjà vérifié.'], 404);
-        }
-
-        $token = \Illuminate\Support\Str::random(64);
-        $user->update([
-            'email_verification_token'             => $token,
-            'email_verification_token_expires_at'  => now()->addHours(24),
-        ]);
-
-        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
-        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyEmail($token, $frontendUrl));
-
-        return response()->json(['message' => 'Email de vérification renvoyé.']);
+        return $user
+            ? response()->json(['user' => $user], 200)
+            : response()->json(['error' => 'Non autorisé'], 401);
     }
 
     public function refresh(): JsonResponse
     {
         try {
-            $tokens = $this->authService->refresh();
-            return response()->json($tokens, 200);
+            return response()->json($this->authService->refresh(), 200);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Impossible de rafraîchir le token'], 401);
         }
     }
 
-    /**
-     * Rafraîchissement via le Refresh Token spécifique
-     */
     public function refreshToken(Request $request): JsonResponse
     {
         $request->validate(['refresh_token' => 'required|string']);
-        
         $user = $this->authService->validateRefreshToken($request->refresh_token);
 
         if (!$user) {
             return response()->json(['error' => 'Refresh token invalide ou expiré'], 401);
         }
 
-
-        $accessToken = JWTAuth::fromUser($user);
-        
         return response()->json([
-            'access_token' => $accessToken,
-            'token_type' => 'bearer',
+            'access_token' => JWTAuth::fromUser($user),
+            'token_type'   => 'bearer',
         ]);
     }
 }
