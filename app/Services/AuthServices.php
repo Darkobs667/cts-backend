@@ -20,30 +20,42 @@ class AuthServices
      */
     public function register(array $data): array
     {
-        // 
-        if(User::where('browserId',$data['browserId'])->exists()){
-            return ['errors' => 'Vous avez deja creer un compte sur cette appareil, vous ne pouvez pas en creer un autre'];
+        // Validation email institutionnel
+        if (!preg_match('/^[^\s@]+@uadb\.edu\.sn$/', $data['email'])) {
+            return ['errors' => 'Seules les adresses @uadb.edu.sn sont autorisées.'];
         }
 
-        // Check if email already exists
+        // Vérification du code d'invitation
+        $invite = \App\Models\InviteCode::where('code', $data['invite_code'] ?? '')
+            ->where('used', false)
+            ->first();
+        if (!$invite) {
+            return ['errors' => 'Code d\'invitation invalide ou déjà utilisé.'];
+        }
+
+        if (User::where('browserId', $data['browserId'])->exists()) {
+            return ['errors' => 'Un compte existe déjà sur cet appareil.'];
+        }
+
         if (User::where('email', $data['email'])->exists()) {
-            return ['errors' => 'Email already exists'];
+            return ['errors' => 'Cette adresse email est déjà utilisée.'];
         }
-        // check password
-        if (strlen($data['password']) < 8) {
-            return ['errors' => 'Password must be at least 8 characters'];
-        }
+
         DB::beginTransaction();
-  
+
         try {
             $user = User::create([
-                'first_name' => $data['first_name'],
-                'last_name' => $data['last_name'],
-                'code' => $data['code'],
-                'email' => $data['email'],
-                'browserId'=>$data['browserId'],
-                'password' => Hash::make($data['password']),
+                'first_name'  => $data['first_name'],
+                'last_name'   => $data['last_name'],
+                'code'        => $data['code'] ?? null,
+                'email'       => $data['email'],
+                'browserId'   => $data['browserId'],
+                'invite_code' => $data['invite_code'],
+                'password'    => Hash::make($data['password']),
             ]);
+
+            // Marquer le code comme utilisé
+            $invite->update(['used' => true, 'used_by' => $user->id]);
 
             $tokens = $this->generateTokens($user);
 
@@ -60,6 +72,11 @@ class AuthServices
         }
     }
 
+
+    public static function voterHash(User $user): string
+    {
+        return hash('sha256', $user->id . config('app.key'));
+    }
 
     /**
      * Authenticate user and return tokens

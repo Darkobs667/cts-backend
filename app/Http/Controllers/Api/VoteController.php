@@ -13,8 +13,9 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Traits\Cacheable;
 use App\Models\Position;
 use App\Models\User;
-use Illuminate\Support\Facades\Log; // pour les logs
+use Illuminate\Support\Facades\Log;
 use App\Models\Candidate;
+use App\Services\AuthServices;
 
 
 
@@ -50,7 +51,7 @@ class VoteController extends Controller
             return response()->json(['message' => 'Utilisateur non authentifié'], 401);
         }
 
-        $voterIdentifier = $user->email;
+        $voterIdentifier = AuthServices::voterHash($user);
 
         // Vérification de doublon
         $existing = Vote::where('position_id', $request->position_id)
@@ -125,7 +126,7 @@ class VoteController extends Controller
             return response()->json(['message' => 'Non authentifié'], 401);
         }
 
-        $votes = Vote::where('hash_session', $user->email)
+        $votes = Vote::where('hash_session', AuthServices::voterHash($user))
                     ->with('position')
                     ->orderBy('created_at', 'desc')
                     ->get()
@@ -149,7 +150,7 @@ class VoteController extends Controller
         }
 
         $vote = Vote::where('id', $voteId)
-                    ->where('hash_session', $user->email)
+                    ->where('hash_session', AuthServices::voterHash($user))
                     ->with('position', 'candidate.user')
                     ->first();
 

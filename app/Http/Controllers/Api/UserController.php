@@ -10,6 +10,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Candidate;
 use App\Models\Vote;
+use App\Services\AuthServices;
 
 
 class UserController extends Controller
@@ -24,7 +25,7 @@ class UserController extends Controller
                              'nom'    => trim($user->first_name . ' ' . $user->last_name),
                              'email'  => $user->email,
                              'role'   => $user->role,
-                             'status' => $user->status ?? 'Validé', // colonne inexistante → null → 'Validé'
+                             'status' => $user->status ?? 'Validé',
                          ];
                      });
 
@@ -34,13 +35,10 @@ class UserController extends Controller
         ]);
     }
 
-     /**
-     * Réinitialiser le mot de passe d'un utilisateur (admin seulement)
-     */
     public function resetPassword(Request $request, $id): JsonResponse
     {
         $user = User::findOrFail($id);
-        $newPassword = Str::random(12); // 12 caractères aléatoires
+        $newPassword = Str::random(12);
         $user->password = Hash::make($newPassword);
         $user->save();
 
@@ -50,19 +48,14 @@ class UserController extends Controller
         ]);
     }
 
-   public function destroy($id)
-{
-    $user = User::findOrFail($id);
+    public function destroy($id)
+    {
+        $user = User::findOrFail($id);
 
-    // Supprimer les candidatures de l'utilisateur
-    Candidate::where('user_id', $user->id)->delete();
+        Candidate::where('user_id', $user->id)->delete();
+        Vote::where('hash_session', AuthServices::voterHash($user))->delete();
+        $user->delete();
 
-    // Supprimer les votes liés (via son email utilisé comme hash_session)
-    Vote::where('hash_session', $user->email)->delete();
-
-    // Supprimer l'utilisateur
-    $user->delete();
-
-    return response()->json(['message' => 'Utilisateur supprimé avec succès']);
-}
+        return response()->json(['message' => 'Utilisateur supprimé avec succès']);
+    }
 }

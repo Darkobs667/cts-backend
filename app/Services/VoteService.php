@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Vote;
 use App\Models\Candidate;
 use App\Models\Position;
-use Illuminate\Support\Facades\Auth;
+use App\Services\AuthServices;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
@@ -21,8 +21,7 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         throw new \Exception('Utilisateur non authentifié', 401);
     }
 
-    // Utilise l'email de l'utilisateur comme identifiant de session
-    $voterIdentifier = $user->email;
+    $voterIdentifier = AuthServices::voterHash($user);
 
     // Vérifie si l'utilisateur a déjà voté pour ce poste
     $existing = Vote::where('position_id', $positionId)
@@ -33,13 +32,6 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         throw new \Exception('Vous avez déjà voté pour ce poste.', 409);
     }
 
-    \Log::info('Données du vote', [
-    'position_id' => $positionId,
-    'candidate_id' => $candidateId,
-    'hash_session' => $voterIdentifier,
-]);
-
-    // Création du vote AVEC hash_session
     return Vote::create([
         'position_id'   => $positionId,
         'candidate_id'  => $candidateId,
@@ -87,9 +79,7 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         $user = auth('api')->user();
         if (!$user) return collect();
 
-        $hashSession = hash('sha256', $user->id . config('app.key'));
-
-        return Vote::where('hash_session', $hashSession)
+        return Vote::where('hash_session', AuthServices::voterHash($user))
                    ->pluck('position_id');
     }
 }
