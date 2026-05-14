@@ -43,4 +43,4 @@ ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 # Exposer le port
 EXPOSE 80
 
-CMD sh -c "php artisan migrate --force && php artisan schedule:work & apache2-foreground"
+CMD sh -c "php artisan route:clear && php artisan migrate --force && php artisan schedule:work & apache2-foreground"
