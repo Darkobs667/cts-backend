@@ -3,63 +3,27 @@
 namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Http;
 
+/**
+ * Stockage d'images en base64 — zéro configuration externe.
+ * L'image est encodée en base64 et stockée directement en base de données.
+ * Compatible avec le reste du code (même interface upload/delete).
+ */
 class CloudinaryService
 {
-    private string $cloudName;
-    private string $apiKey;
-    private string $apiSecret;
-
-    public function __construct()
-    {
-        $this->cloudName = env('CLOUDINARY_CLOUD_NAME', '');
-        $this->apiKey    = env('CLOUDINARY_API_KEY', '');
-        $this->apiSecret = env('CLOUDINARY_API_SECRET', '');
-    }
-
+    /**
+     * Encode l'image en base64 data URI et la retourne.
+     * La "suppression" n'est pas nécessaire (gérée par la DB).
+     */
     public function upload(UploadedFile $file, string $folder = 'candidates'): ?string
     {
-        if (!$this->cloudName || !$this->apiKey || !$this->apiSecret) {
-            // Fallback sur le stockage local si Cloudinary non configuré
-            return $file->store($folder, 'public');
-        }
-
-        $timestamp = time();
-        $params    = "folder={$folder}&timestamp={$timestamp}";
-        $signature = sha1($params . $this->apiSecret);
-
-        $response = Http::attach(
-            'file', file_get_contents($file->getRealPath()), $file->getClientOriginalName()
-        )->post("https://api.cloudinary.com/v1_1/{$this->cloudName}/image/upload", [
-            'api_key'   => $this->apiKey,
-            'timestamp' => $timestamp,
-            'folder'    => $folder,
-            'signature' => $signature,
-        ]);
-
-        if ($response->successful()) {
-            return $response->json('secure_url');
-        }
-
-        // Fallback local si Cloudinary échoue
-        return $file->store($folder, 'public');
+        $mime    = $file->getMimeType();
+        $data    = base64_encode(file_get_contents($file->getRealPath()));
+        return "data:{$mime};base64,{$data}";
     }
 
     public function delete(string $publicIdOrUrl): void
     {
-        if (!$this->cloudName || !$this->apiKey || !$this->apiSecret) return;
-        if (str_starts_with($publicIdOrUrl, 'http')) return; // URL locale, rien à faire
-
-        $timestamp = time();
-        $params    = "public_id={$publicIdOrUrl}&timestamp={$timestamp}";
-        $signature = sha1($params . $this->apiSecret);
-
-        Http::post("https://api.cloudinary.com/v1_1/{$this->cloudName}/image/destroy", [
-            'public_id' => $publicIdOrUrl,
-            'api_key'   => $this->apiKey,
-            'timestamp' => $timestamp,
-            'signature' => $signature,
-        ]);
+        // Rien à faire — la suppression est gérée par la DB
     }
 }
