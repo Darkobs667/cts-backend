@@ -23,10 +23,6 @@ class AuthServices
      */
     public function register(array $data): array
     {
-        if (!preg_match('/^[^\s@]+@uadb\.edu\.sn$/', $data['email'])) {
-            return ['errors' => 'Seules les adresses @uadb.edu.sn sont autorisées.'];
-        }
-
         if (User::where('browserId', $data['browserId'])->exists()) {
             return ['errors' => 'Un compte existe déjà sur cet appareil.'];
         }

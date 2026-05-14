@@ -25,8 +25,10 @@ class CandidatService
         return Candidate::create([
             'user_id'     => $data['user_id'], 
             'position_id' => $data['position_id'],
+            'slogan'      => $data['slogan'] ?? null,
             'bio'         => $data['bio'] ?? null,
             'photo_path'  => $data['photo_path'] ?? null,
+            'status'      => 'valide',
         ]);
     }
 

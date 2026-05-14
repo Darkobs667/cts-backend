@@ -44,7 +44,7 @@ public function castVote(int $positionId, ?int $candidateId): Vote
      */
     public function getResults(?int $positionId = null): Collection
     {
-        $query = Position::with(['candidates.user'])->where('is_active', true);
+        $query = Position::with(['candidates.user']);
         if ($positionId) {
             $query->where('id', $positionId);
         }

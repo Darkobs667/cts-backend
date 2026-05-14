@@ -18,6 +18,7 @@ class UserController extends Controller
     public function index()
     {
         $users = User::select('id', 'first_name', 'last_name', 'email', 'role')
+                     ->where('role', 'electeur')
                      ->get()
                      ->map(function ($user) {
                          return [

@@ -40,6 +40,18 @@ class PositionController extends Controller
         ]);
     }
 
+    public function show($id): JsonResponse
+    {
+        $position = $this->rememberCache("position_{$id}", function () use ($id) {
+            return Position::findOrFail($id)->toArray();
+        }, $this->cacheTtl);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $position,
+        ]);
+    }
+
     /**
      * Créer un nouveau poste (Admin uniquement)
      */

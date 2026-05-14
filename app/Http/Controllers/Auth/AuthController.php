@@ -120,6 +120,30 @@ class AuthController extends Controller
         return response()->json(['message' => 'Email vérifié avec succès. Vous pouvez vous connecter.']);
     }
 
+    public function resendVerification(Request $request): JsonResponse
+    {
+        $request->validate(['email' => 'required|email']);
+
+        $user = \App\Models\User::where('email', $request->email)
+            ->whereNull('email_verified_at')
+            ->first();
+
+        if (!$user) {
+            return response()->json(['message' => 'Email introuvable ou déjà vérifié.'], 404);
+        }
+
+        $token = \Illuminate\Support\Str::random(64);
+        $user->update([
+            'email_verification_token'             => $token,
+            'email_verification_token_expires_at'  => now()->addHours(24),
+        ]);
+
+        $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\VerifyEmail($token, $frontendUrl));
+
+        return response()->json(['message' => 'Email de vérification renvoyé.']);
+    }
+
     public function refresh(): JsonResponse
     {
         try {

@@ -26,6 +26,7 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/login',    [AuthController::class, 'login']);
 });
 
+Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
 Route::get('/verify-email/{token}', [AuthController::class, 'verifyEmail']);
 
 Route::post('/refresh',       [AuthController::class, 'refresh']);
@@ -67,8 +68,6 @@ Route::middleware('auth:api')->group(function () {
 
     Route::put('/candidates/{id}/approve', [CandidateController::class, 'approve'])->middleware('admin');
     Route::put('/candidates/{id}/reject',  [CandidateController::class, 'reject'])->middleware('admin');
-
-    Route::post('/apply', [CandidateController::class, 'apply']);
 
     // Utilisateurs
     Route::get('/users',                        [UserController::class, 'index'])->middleware('admin');

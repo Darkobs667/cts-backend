@@ -19,16 +19,18 @@ class User extends Authenticatable implements JWTSubject
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
     protected $fillable = [
-    'first_name',
-    'last_name',
-    'code',
-    'email',
-    'password',
-    'browserId',
-    'email_verification_token',
-    'email_verification_token_expires_at',
-    'email_verified_at',
-];
+        'first_name',
+        'last_name',
+        'code',
+        'email',
+        'password',
+        'role',
+        'status',
+        'browserId',
+        'email_verification_token',
+        'email_verification_token_expires_at',
+        'email_verified_at',
+    ];
 protected $hidden = [
     'password',
     'remember_token'

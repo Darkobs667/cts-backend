@@ -136,6 +136,7 @@ class VoteController extends Controller
                         
                         return [
                             'id'              => $vote->id,
+                            'position_id'     => $vote->position_id,
                             'election_title'   => $vote->position->title ?? 'Scrutin inconnu',
                             'candidate_name'   => $candidateName,
                             'photo_path'       => $photoPath,
