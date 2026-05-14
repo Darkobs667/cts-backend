@@ -17,7 +17,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::select('id', 'first_name', 'last_name', 'email', 'role')
+        $users = User::select('id', 'first_name', 'last_name', 'email', 'role', 'status', 'email_verified_at')
                      ->where('role', 'electeur')
                      ->get()
                      ->map(function ($user) {
@@ -26,7 +26,7 @@ class UserController extends Controller
                              'nom'    => trim($user->first_name . ' ' . $user->last_name),
                              'email'  => $user->email,
                              'role'   => $user->role,
-                             'status' => $user->status ?? 'Validé',
+                             'status' => $user->status ?? ($user->email_verified_at ? 'Validé' : 'En attente'),
                          ];
                      });
 

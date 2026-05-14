@@ -106,7 +106,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Rafraîchir le token d'accès
+     * Vérification de l'email via le token reçu par mail
      */
     public function verifyEmail(Request $request): JsonResponse
     {

@@ -31,6 +31,15 @@ class AuthServices
             return ['errors' => 'Cette adresse email est déjà utilisée.'];
         }
 
+        // Validation du domaine email si restreint via .env
+        $allowedDomain = env('ALLOWED_EMAIL_DOMAIN', null);
+        if ($allowedDomain) {
+            $emailDomain = substr(strrchr($data['email'], '@'), 1);
+            if ($emailDomain !== $allowedDomain) {
+                return ['errors' => "Seules les adresses @{$allowedDomain} sont autorisées."];
+            }
+        }
+
         DB::beginTransaction();
 
         try {
@@ -47,10 +56,16 @@ class AuthServices
                 'email_verification_token_expires_at'   => now()->addHours(24),
             ]);
 
-            $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
-            Mail::to($user->email)->send(new VerifyEmail($token, $frontendUrl));
-
             DB::commit();
+
+            // Envoi email — on ne fait pas échouer l'inscription si l'email plante
+            try {
+                $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+                Mail::to($user->email)->send(new VerifyEmail($token, $frontendUrl));
+            } catch (\Exception $mailException) {
+                \Illuminate\Support\Facades\Log::error('Erreur envoi email vérification: ' . $mailException->getMessage());
+                // L'utilisateur est créé, il pourra renvoyer l'email via /resend-verification
+            }
 
             return ['email_sent' => true];
         } catch (\Exception $e) {

@@ -233,9 +233,14 @@ class CandidateController extends Controller
      */
     protected function forgetCacheByPrefix($prefix)
     {
-        $this->forgetCache('candidates_list_pos_all_status_all');
-        $this->forgetCache('candidates_list_pos_all_status_en_attente');
-        $this->forgetCache('candidates_list_pos_all_status_valide');
-        $this->forgetCache('candidates_list_pos_all_status_refuse');
+        $statuses = ['all', 'en_attente', 'valide', 'refuse'];
+        $positions = \App\Models\Position::pluck('id')->toArray();
+        $positions[] = 'all';
+
+        foreach ($positions as $posId) {
+            foreach ($statuses as $status) {
+                $this->forgetCache("candidates_list_pos_{$posId}_status_{$status}");
+            }
+        }
     }
 }

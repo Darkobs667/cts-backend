@@ -249,33 +249,39 @@ class VoteController extends Controller
 
 public function exportPDF()
 {
-    // Récupérer tous les scrutins avec leurs candidats et votes
     $positions = Position::all();
     $data = [];
 
     foreach ($positions as $position) {
-        $totalVotes = Vote::where('position_id', $position->id)->count();
-        $candidates = Candidate::where('position_id', $position->id)->get();
+        $onlineTotal = Vote::where('position_id', $position->id)->count();
+        $candidates  = Candidate::where('position_id', $position->id)->get();
         $candidatesData = [];
 
         foreach ($candidates as $candidate) {
-            $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
-            $user = User::find($candidate->user_id);
-            $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
+            $onlineVotes   = Vote::where('candidate_id', $candidate->id)->count();
+            $physicalVotes = (int) $candidate->physical_votes;
+            $totalVotes    = $onlineVotes + $physicalVotes;
+            $user          = User::find($candidate->user_id);
+            $fullName      = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
             $candidatesData[] = [
-                'name'        => $fullName,
-                'votes_count' => $candidateVotes,
+                'name'           => $fullName,
+                'online_votes'   => $onlineVotes,
+                'physical_votes' => $physicalVotes,
+                'votes_count'    => $totalVotes,
             ];
         }
 
-        // Trier par votes décroissants
         usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
 
+        $physicalTotal = array_sum(array_column($candidatesData, 'physical_votes'));
+
         $data[] = [
-            'title'       => $position->title,
-            'is_active'   => $position->is_active,
-            'total_votes' => $totalVotes,
-            'candidates'  => $candidatesData,
+            'title'          => $position->title,
+            'is_active'      => $position->is_active,
+            'online_total'   => $onlineTotal,
+            'physical_total' => $physicalTotal,
+            'total_votes'    => $onlineTotal + $physicalTotal,
+            'candidates'     => $candidatesData,
         ];
     }
 
