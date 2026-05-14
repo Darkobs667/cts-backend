@@ -27,7 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->booted(function () {
         // Max 3 inscriptions par IP par heure
         RateLimiter::for('register', function (Request $request) {
-            return Limit::perHour(3)->by($request->ip())->response(function () {
+            return Limit::perHour(20)->by($request->ip())->response(function () {
                 return response()->json([
                     'error' => 'Trop de tentatives d\'inscription. Réessayez dans 1 heure.'
                 ], 429);
