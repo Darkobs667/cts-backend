@@ -25,29 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->booted(function () {
-        // Max 3 inscriptions par IP par heure
         RateLimiter::for('register', function (Request $request) {
-            return Limit::perHour(20)->by($request->ip())->response(function () {
-                return response()->json([
-                    'error' => 'Trop de tentatives d\'inscription. Réessayez dans 1 heure.'
-                ], 429);
-            });
+            return Limit::none();
         });
-
-        // Max 5 tentatives de connexion par IP par minute
         RateLimiter::for('login', function (Request $request) {
-            return [
-                Limit::perMinute(5)->by($request->ip())->response(function () {
-                    return response()->json([
-                        'error' => 'Trop de tentatives de connexion. Réessayez dans 1 minute.'
-                    ], 429);
-                }),
-                // Blocage supplémentaire par email : 5 tentatives par heure
-                Limit::perHour(5)->by($request->input('email'))->response(function () {
-                    return response()->json([
-                        'error' => 'Compte temporairement bloqué suite à trop de tentatives. Réessayez dans 1 heure.'
-                    ], 429);
-                }),
-            ];
+            return Limit::none();
         });
     })->create();

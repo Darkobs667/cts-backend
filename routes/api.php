@@ -25,8 +25,8 @@ Route::get('/cron/close-expired', function () {
     return response()->json(['closed' => $count]);
 });
 
-Route::middleware('throttle:register')->post('/register', [AuthController::class, 'register']);
-Route::middleware('throttle:login')->post('/login',    [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
+Route::post('/login',    [AuthController::class, 'login']);
 
 Route::post('/refresh',       [AuthController::class, 'refresh']);
 Route::post('/refresh-token', [AuthController::class, 'refreshToken']);
