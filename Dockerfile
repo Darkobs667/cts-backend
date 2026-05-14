@@ -48,4 +48,4 @@ RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf
 EXPOSE 80
 
 # Commande de démarrage (avec migration automatique)
-CMD sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=\${PORT:-10000}"
+CMD sh -c "php artisan migrate --force && php artisan schedule:work & apache2-foreground"
