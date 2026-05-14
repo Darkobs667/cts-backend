@@ -39,13 +39,8 @@ RUN chown -R www-data:www-data /var/www/html \
 
 # Configurer le DocumentRoot
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
 
-
-
-# Exposer le port (Render utilisera la variable PORT, mais Apache utilise 80 par défaut)
+# Exposer le port
 EXPOSE 80
 
-# Commande de démarrage (avec migration automatique)
 CMD sh -c "php artisan migrate --force && php artisan schedule:work & apache2-foreground"
