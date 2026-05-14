@@ -99,13 +99,7 @@ class VoteController extends Controller
         $cacheKey = "vote_results_{$positionId}";
         
         $results = $this->rememberCache($cacheKey, function () use ($positionId) {
-            if ($positionId !== 'all') {
-                $data = $this->voteService->getResults($positionId);
-            } else {
-                $data = $this->voteService->getResults();
-            }
-            
-            // Convertir en array pour éviter les problèmes de sérialisation
+            $data = $this->voteService->getResults($positionId !== 'all' ? (int)$positionId : null);
             return json_decode(json_encode($data), true);
         }, $this->resultsCacheTtl);
 
@@ -116,8 +110,8 @@ class VoteController extends Controller
     }
 
     /**
-     * Récupérer les IDs des postes pour lesquels l'utilisateur a déjà voté
-     * Utile pour griser les boutons de vote côté Frontend 
+     * Récupérer les votes de l'utilisateur avec détails complets
+     * Utile pour la page historique des reçus
      */
     public function myVotes(): JsonResponse
     {
@@ -127,13 +121,24 @@ class VoteController extends Controller
         }
 
         $votes = Vote::where('hash_session', AuthServices::voterHash($user))
-                    ->with('position')
+                    ->with('position', 'candidate.user')
                     ->orderBy('created_at', 'desc')
                     ->get()
                     ->map(function ($vote) {
+                        $candidateName = 'Vote blanc';
+                        $photoPath = null;
+                        
+                        if ($vote->candidate) {
+                            $candidateUser = $vote->candidate->user;
+                            $candidateName = $candidateUser ? ($candidateUser->first_name . ' ' . $candidateUser->last_name) : 'Candidat';
+                            $photoPath = $vote->candidate->photo_path ? asset('storage/' . $vote->candidate->photo_path) : null;
+                        }
+                        
                         return [
                             'id'              => $vote->id,
                             'election_title'   => $vote->position->title ?? 'Scrutin inconnu',
+                            'candidate_name'   => $candidateName,
+                            'photo_path'       => $photoPath,
                             'date_voted'       => $vote->created_at->toIsoString(),
                             'transaction_ref'  => 'CTS-' . strtoupper(substr(md5($vote->id), 0, 8)),
                         ];
@@ -158,12 +163,25 @@ class VoteController extends Controller
             return response()->json(['message' => 'Vote introuvable ou non autorisé'], 404);
         }
 
-        // Génération d'un PDF simple avec les informations du vote
+        // Récupérer les infos du candidat
+        $candidate = $vote->candidate;
+        $candidateName = 'Vote blanc';
+        $photoPath = null;
+        
+        if ($candidate) {
+            $candidateUser = $candidate->user;
+            $candidateName = ($candidateUser ? $candidateUser->first_name . ' ' . $candidateUser->last_name : 'Candidat');
+            $photoPath = $candidate->photo_path ? asset('storage/' . $candidate->photo_path) : null;
+        }
+
+        // Génération d'un PDF amélioré avec les informations du vote
         $data = [
             'election' => $vote->position->title ?? 'Scrutin inconnu',
             'date'     => $vote->created_at->format('d/m/Y à H:i'),
             'ref'      => 'CTS-' . strtoupper(substr(md5($vote->id), 0, 8)),
             'electeur' => $user->first_name . ' ' . $user->last_name,
+            'candidat_name' => $candidateName,
+            'photo_path' => $photoPath,
         ];
 
         $pdf = Pdf::loadView('pdf.receipt', $data);

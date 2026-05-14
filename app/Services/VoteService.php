@@ -42,33 +42,40 @@ public function castVote(int $positionId, ?int $candidateId): Vote
     /**
      * Obtenir les résultats actuels pour tous les postes.
      */
-    public function getResults(): Collection
+    public function getResults(?int $positionId = null): Collection
     {
-        return Position::with(['candidates.user'])
-            ->where('is_active', true)
-            ->get()
-            ->map(function ($position) {
+        $query = Position::with(['candidates.user'])->where('is_active', true);
+        if ($positionId) {
+            $query->where('id', $positionId);
+        }
+
+        return $query->get()->map(function ($position) {
+            $validCandidates = $position->candidates->where('status', 'valide');
+            $totalVotes = Vote::where('position_id', $position->id)->count();
+
+            $candidates = $validCandidates->map(function ($candidate) use ($totalVotes) {
+                $votes = Vote::where('candidate_id', $candidate->id)->count();
+                $pct   = $totalVotes > 0 ? round(($votes / $totalVotes) * 100, 1) : 0;
                 return [
-                    'id'         => $position->id,
-                    'title'      => $position->title,
-                    'is_active'  => $position->is_active,
-                    'started_at' => $position->started_at,
-                    // Pas de votes_count ni de détail candidats tant que actif
-                    'candidates' => $position->candidates
-                        ->where('status', 'valide')
-                        ->map(function ($candidate) {
-                            return [
-                                'id'         => $candidate->id,
-                                'name'       => $candidate->user->first_name . ' ' . $candidate->user->last_name,
-                                'photo_path' => $candidate->photo_path,
-                                'bio'        => $candidate->bio,
-                                'slogan'     => $candidate->slogan,
-                            ];
-                            // Aucun votes_count retourné tant que le scrutin est actif
-                        })
+                    'id'          => $candidate->id,
+                    'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
+                    'photo_path'  => $candidate->photo_path,
+                    'bio'         => $candidate->bio,
+                    'slogan'      => $candidate->slogan,
+                    'votes_count' => $votes,
+                    'percentage'  => $pct,
                 ];
-            })
-            ->values();
+            })->sortByDesc('votes_count')->values();
+
+            return [
+                'id'          => $position->id,
+                'title'       => $position->title,
+                'is_active'   => $position->is_active,
+                'started_at'  => $position->started_at,
+                'total_votes' => $totalVotes,
+                'candidates'  => $candidates,
+            ];
+        })->values();
     }
 
 
