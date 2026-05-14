@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Mail\VerifyEmail;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException;
 use Illuminate\Support\Facades\DB;
@@ -20,17 +23,8 @@ class AuthServices
      */
     public function register(array $data): array
     {
-        // Validation email institutionnel
         if (!preg_match('/^[^\s@]+@uadb\.edu\.sn$/', $data['email'])) {
             return ['errors' => 'Seules les adresses @uadb.edu.sn sont autorisées.'];
-        }
-
-        // Vérification du code d'invitation
-        $invite = \App\Models\InviteCode::where('code', $data['invite_code'] ?? '')
-            ->where('used', false)
-            ->first();
-        if (!$invite) {
-            return ['errors' => 'Code d\'invitation invalide ou déjà utilisé.'];
         }
 
         if (User::where('browserId', $data['browserId'])->exists()) {
@@ -44,32 +38,45 @@ class AuthServices
         DB::beginTransaction();
 
         try {
+            $token = Str::random(64);
+
             $user = User::create([
-                'first_name'  => $data['first_name'],
-                'last_name'   => $data['last_name'],
-                'code'        => $data['code'] ?? null,
-                'email'       => $data['email'],
-                'browserId'   => $data['browserId'],
-                'invite_code' => $data['invite_code'],
-                'password'    => Hash::make($data['password']),
+                'first_name'               => $data['first_name'],
+                'last_name'                => $data['last_name'],
+                'code'                     => $data['code'] ?? null,
+                'email'                    => $data['email'],
+                'browserId'                => $data['browserId'],
+                'invite_code'              => null,
+                'password'                 => Hash::make($data['password']),
+                'email_verification_token' => $token,
             ]);
 
-            // Marquer le code comme utilisé
-            $invite->update(['used' => true, 'used_by' => $user->id]);
-
-            $tokens = $this->generateTokens($user);
+            $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
+            Mail::to($user->email)->send(new VerifyEmail($token, $frontendUrl));
 
             DB::commit();
 
-            return [
-                'user' => $user,
-                'access_token' => $tokens['access_token'],
-                'refresh_token' => $tokens['refresh_token'],
-            ];
+            return ['email_sent' => true];
         } catch (\Exception $e) {
             DB::rollBack();
             throw $e;
         }
+    }
+
+    public function verifyEmail(string $token): bool
+    {
+        $user = User::where('email_verification_token', $token)
+            ->whereNull('email_verified_at')
+            ->first();
+
+        if (!$user) return false;
+
+        $user->update([
+            'email_verified_at'        => now(),
+            'email_verification_token' => null,
+        ]);
+
+        return true;
     }
 
 
@@ -101,6 +108,10 @@ class AuthServices
 
         if (!Hash::check($credentials['password'], $user->password)) {
             throw new \Exception("Mot de passe incorrect", 401);
+        }
+
+        if (!$user->email_verified_at) {
+            throw new \Exception("Veuillez vérifier votre email avant de vous connecter.", 403);
         }
 
         $tokens = $this->generateTokens($user);

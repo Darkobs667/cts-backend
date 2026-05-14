@@ -24,13 +24,12 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'first_name'  => 'required|string|max:255',
-            'last_name'   => 'required|string|max:255',
-            'code'        => 'nullable|string|unique:users,code',
-            'email'       => 'required|string|email|max:255|unique:users,email',
-            'password'    => 'required|string|min:8|confirmed',
-            'browserId'   => 'required|string',
-            'invite_code' => 'required|string',
+            'first_name' => 'required|string|max:255',
+            'last_name'  => 'required|string|max:255',
+            'code'       => 'nullable|string|unique:users,code',
+            'email'      => 'required|string|email|max:255|unique:users,email',
+            'password'   => 'required|string|min:8|confirmed',
+            'browserId'  => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -40,20 +39,13 @@ class AuthController extends Controller
 
         try {
             $result = $this->authService->register($request->all());
-            if(isset($result['errors'])){
-                    return response()->json([
-                        'error' => $result['errors'],
-                    ],'401');
-            }else{
-            return response()->json([
-                'message' => 'Utilisateur créé avec succès',
-                'data' => $result,
-                
-            ], 201);
+            if (isset($result['errors'])) {
+                return response()->json(['error' => $result['errors']], 401);
             }
+            return response()->json([
+                'message' => 'Compte créé. Vérifiez votre email pour activer votre compte.',
+            ], 201);
         } catch (\Exception $e) {
-            //return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
-            // On garde 500 car 22000 n'est pas un code HTTP valide
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
@@ -116,6 +108,18 @@ class AuthController extends Controller
     /**
      * Rafraîchir le token d'accès
      */
+    public function verifyEmail(Request $request): JsonResponse
+    {
+        $token = $request->route('token');
+        $verified = $this->authService->verifyEmail($token);
+
+        if (!$verified) {
+            return response()->json(['error' => 'Lien invalide ou déjà utilisé.'], 400);
+        }
+
+        return response()->json(['message' => 'Email vérifié avec succès. Vous pouvez vous connecter.']);
+    }
+
     public function refresh(): JsonResponse
     {
         try {
