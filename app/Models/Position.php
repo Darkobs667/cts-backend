@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use App\Models\Candidate;
 use App\Models\Vote;
 
-#[Fillable(['title', 'is_active','started_at', 'description'])]
+#[Fillable(['title', 'is_active', 'started_at', 'closes_at', 'description'])]
 class Position extends Model
 {
     use HasFactory;

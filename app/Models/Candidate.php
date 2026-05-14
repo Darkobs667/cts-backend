@@ -5,7 +5,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['user_id', 'position_id', 'bio','status', 'photo_path'])]
+#[Fillable(['user_id', 'position_id', 'bio', 'slogan', 'status', 'photo_path', 'physical_votes'])]
 
 class Candidate extends Model
 {

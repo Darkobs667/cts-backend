@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\CandidateController;
 use App\Http\Controllers\Api\VoteController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\InviteCodeController;
+use App\Http\Controllers\Api\PhysicalVoteController;
 
 // =============================================
 // ROUTES PUBLIQUES
@@ -81,4 +82,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/invite-codes/generate',  [InviteCodeController::class, 'generate'])->middleware('admin');
     Route::get('/invite-codes',            [InviteCodeController::class, 'index'])->middleware('admin');
     Route::delete('/invite-codes/{id}',    [InviteCodeController::class, 'destroy'])->middleware('admin');
+
+    // Votes physiques jour J (admin)
+    Route::post('/positions/{positionId}/physical-votes', [PhysicalVoteController::class, 'store'])->middleware('admin');
 });

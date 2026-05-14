@@ -172,50 +172,58 @@ class VoteController extends Controller
     }
 
     public function allResults(): JsonResponse
-{
-    try {
-        $positions = Position::all();
-        $all = [];
+    {
+        try {
+            $positions = Position::all();
+            $all = [];
 
-        foreach ($positions as $position) {
-            $totalVotes = Vote::where('position_id', $position->id)->count();
-            $candidates = Candidate::where('position_id', $position->id)->get();
+            foreach ($positions as $position) {
+                $onlineTotal = Vote::where('position_id', $position->id)->count();
+                $candidates  = Candidate::where('position_id', $position->id)->get();
+                $hasPhysical = $candidates->sum('physical_votes') > 0;
 
-            $candidatesData = [];
-            foreach ($candidates as $candidate) {
-                $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
+                $candidatesData = [];
+                foreach ($candidates as $candidate) {
+                    $onlineVotes   = Vote::where('candidate_id', $candidate->id)->count();
+                    $physicalVotes = (int) $candidate->physical_votes;
+                    $totalVotes    = $onlineVotes + $physicalVotes;
 
-                // Récupérer l'utilisateur lié au candidat
-                $user = User::find($candidate->user_id);
-                $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
+                    $user     = User::find($candidate->user_id);
+                    $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
 
-                $candidatesData[] = [
-                    'id'          => $candidate->id,
-                    'name'        => $fullName,
-                    'photo_path'  => $candidate->photo_path,
-                    'votes_count' => $candidateVotes,
+                    $candidatesData[] = [
+                        'id'             => $candidate->id,
+                        'name'           => $fullName,
+                        'photo_path'     => $candidate->photo_path,
+                        'online_votes'   => $onlineVotes,
+                        'physical_votes' => $physicalVotes,
+                        'votes_count'    => $totalVotes,
+                    ];
+                }
+
+                usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+
+                $physicalTotal = array_sum(array_column($candidatesData, 'physical_votes'));
+
+                $all[] = [
+                    'id'             => $position->id,
+                    'title'          => $position->title,
+                    'is_active'      => (bool) $position->is_active,
+                    'has_physical'   => $hasPhysical,
+                    'online_total'   => $onlineTotal,
+                    'physical_total' => $physicalTotal,
+                    'total_votes'    => $onlineTotal + $physicalTotal,
+                    'candidates'     => $candidatesData,
                 ];
             }
 
-            // Trier par votes décroissants
-            usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+            return response()->json(['success' => true, 'data' => $all]);
 
-            $all[] = [
-                'id'          => $position->id,
-                'title'       => $position->title,
-                'is_active'   => (bool) $position->is_active,
-                'total_votes' => $totalVotes,
-                'candidates'  => $candidatesData,
-            ];
+        } catch (\Exception $e) {
+            Log::error('Erreur dans allResults : ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-
-        return response()->json(['success' => true, 'data' => $all]);
-
-    } catch (\Exception $e) {
-        Log::error('Erreur dans allResults : ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
     }
-}
 
 public function exportPDF()
 {
