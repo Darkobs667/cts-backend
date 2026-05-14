@@ -42,33 +42,34 @@ public function castVote(int $positionId, ?int $candidateId): Vote
     /**
      * Obtenir les résultats actuels pour tous les postes.
      */
-  public function getResults(): Collection
-{
-    return Position::with(['candidates.user'])
-        ->where('is_active', true)   // ← ne garder que les postes actifs
-        ->get()
-        ->map(function ($position) {
-            $totalVotes = Vote::where('position_id', $position->id)->count();
-            return [
-                'id'          => $position->id,
-                'title'       => $position->title,
-                'is_active'   => $position->is_active,
-                  'started_at'  => $position->started_at,   // <-- ajoute ceci
-                'total_votes' => $totalVotes,
-                'candidates'  => $position->candidates->map(function ($candidate) {
-                    return [
-                        'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
-                        'votes_count' => Vote::where('candidate_id', $candidate->id)->count(),
-                        'photo_path'  => $candidate->photo_path,
-                        'bio'         => $candidate->bio,
-                        'profession'  => $candidate->user->role ?? 'Électeur',
-                    ];
-                })
-            ];
-        })
-        ->sortByDesc('total_votes')
-        ->values();
-}
+    public function getResults(): Collection
+    {
+        return Position::with(['candidates.user'])
+            ->where('is_active', true)
+            ->get()
+            ->map(function ($position) {
+                return [
+                    'id'         => $position->id,
+                    'title'      => $position->title,
+                    'is_active'  => $position->is_active,
+                    'started_at' => $position->started_at,
+                    // Pas de votes_count ni de détail candidats tant que actif
+                    'candidates' => $position->candidates
+                        ->where('status', 'valide')
+                        ->map(function ($candidate) {
+                            return [
+                                'id'         => $candidate->id,
+                                'name'       => $candidate->user->first_name . ' ' . $candidate->user->last_name,
+                                'photo_path' => $candidate->photo_path,
+                                'bio'        => $candidate->bio,
+                                'slogan'     => $candidate->slogan,
+                            ];
+                            // Aucun votes_count retourné tant que le scrutin est actif
+                        })
+                ];
+            })
+            ->values();
+    }
 
 
     /**

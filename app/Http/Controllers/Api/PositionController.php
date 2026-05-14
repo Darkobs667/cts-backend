@@ -48,7 +48,9 @@ class PositionController extends Controller
         $validator = Validator::make($request->all(), [
             'title'       => 'required|string|unique:positions,title|max:255',
             'description' => 'nullable|string',
-            'is_active'   => 'boolean'
+            'is_active'   => 'boolean',
+            'closes_at'   => 'nullable|date|after:now',
+            'quorum'      => 'nullable|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -77,14 +79,12 @@ class PositionController extends Controller
     {
         $position = Position::findOrFail($id);
 
-        $data = $request->only('title', 'description', 'is_active');
+        $data = $request->only('title', 'description', 'is_active', 'closes_at', 'quorum');
 
-        // Si on active le scrutin et qu'il n'a pas encore de date de début, on l'enregistre
         if (isset($data['is_active']) && $data['is_active'] == true && !$position->started_at) {
             $data['started_at'] = now();
         }
 
-        // Si on désactive, on efface started_at (pour un éventuel prochain démarrage)
         if (isset($data['is_active']) && $data['is_active'] == false) {
             $data['started_at'] = null;
         }
