@@ -59,8 +59,6 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/candidates/{id}',          [CandidateController::class, 'update'])->middleware('admin');
     Route::delete('/candidates/{id}',      [CandidateController::class, 'destroy'])->middleware('admin');
     Route::get('/candidates/{id}',         [CandidateController::class, 'show']);
-    Route::put('/candidates/{id}/approve', [CandidateController::class, 'approve'])->middleware('admin');
-    Route::put('/candidates/{id}/reject',  [CandidateController::class, 'reject'])->middleware('admin');
 
     Route::get('/users',                     [UserController::class, 'index'])->middleware('admin');
     Route::put('/users/{id}/reset-password', [UserController::class, 'resetPassword'])->middleware('admin');
