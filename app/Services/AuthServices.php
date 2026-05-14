@@ -12,10 +12,6 @@ class AuthServices
 {
     public function register(array $data): array
     {
-        if (User::where('browserId', $data['browserId'])->exists()) {
-            return ['errors' => 'Un compte existe déjà sur cet appareil.'];
-        }
-
         if (User::where('email', $data['email'])->exists()) {
             return ['errors' => 'Cette adresse email est déjà utilisée.'];
         }
@@ -35,7 +31,7 @@ class AuthServices
                 'last_name'         => $data['last_name'],
                 'code'              => $data['code'] ?? null,
                 'email'             => $data['email'],
-                'browserId'         => $data['browserId'],
+                'browserId'         => $data['browserId'] ?? null,
                 'password'          => Hash::make($data['password']),
                 'role'              => $data['role'] ?? 'electeur',
                 'email_verified_at' => now(),
