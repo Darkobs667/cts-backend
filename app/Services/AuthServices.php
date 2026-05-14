@@ -41,14 +41,14 @@ class AuthServices
             $token = Str::random(64);
 
             $user = User::create([
-                'first_name'               => $data['first_name'],
-                'last_name'                => $data['last_name'],
-                'code'                     => $data['code'] ?? null,
-                'email'                    => $data['email'],
-                'browserId'                => $data['browserId'],
-                'invite_code'              => null,
-                'password'                 => Hash::make($data['password']),
-                'email_verification_token' => $token,
+                'first_name'                            => $data['first_name'],
+                'last_name'                             => $data['last_name'],
+                'code'                                  => $data['code'] ?? null,
+                'email'                                 => $data['email'],
+                'browserId'                             => $data['browserId'],
+                'password'                              => Hash::make($data['password']),
+                'email_verification_token'              => $token,
+                'email_verification_token_expires_at'   => now()->addHours(24),
             ]);
 
             $frontendUrl = env('FRONTEND_URL', 'http://localhost:5173');
@@ -67,13 +67,15 @@ class AuthServices
     {
         $user = User::where('email_verification_token', $token)
             ->whereNull('email_verified_at')
+            ->where('email_verification_token_expires_at', '>', now())
             ->first();
 
         if (!$user) return false;
 
         $user->update([
-            'email_verified_at'        => now(),
-            'email_verification_token' => null,
+            'email_verified_at'                          => now(),
+            'email_verification_token'                   => null,
+            'email_verification_token_expires_at'        => null,
         ]);
 
         return true;
