@@ -140,11 +140,10 @@ class VoteController extends Controller
             return response()->json(['message' => 'Vote introuvable ou non autorisé'], 404);
         }
 
-        // Récupérer les infos du candidat
         $candidate = $vote->candidate;
         $candidateName = 'Vote blanc';
         $photoPath = null;
-        
+
         if ($candidate) {
             $candidateUser = $candidate->user;
             $candidateName = ($candidateUser ? $candidateUser->first_name . ' ' . $candidateUser->last_name : 'Candidat');
@@ -164,6 +163,46 @@ class VoteController extends Controller
         $pdf = Pdf::loadView('pdf.receipt', $data);
 
         return $pdf->download('Recu_Vote_' . $vote->id . '.pdf');
+    }
+
+    /**
+     * Reçu public partageable via transaction_ref (sans authentification)
+     */
+    public function publicReceipt(string $ref): JsonResponse
+    {
+        // La ref est CTS-XXXXXXXX, on retrouve le vote via md5(id)
+        $votes = Vote::with('position', 'candidate.user')->get();
+
+        $vote = $votes->first(function ($v) use ($ref) {
+            return 'CTS-' . strtoupper(substr(md5($v->id), 0, 8)) === strtoupper($ref);
+        });
+
+        if (!$vote) {
+            return response()->json(['message' => 'Reçu introuvable'], 404);
+        }
+
+        $candidate = $vote->candidate;
+        $candidateName = 'Vote blanc';
+        $photoPath = null;
+
+        if ($candidate) {
+            $candidateUser = $candidate->user;
+            $candidateName = $candidateUser
+                ? $candidateUser->first_name . ' ' . $candidateUser->last_name
+                : 'Candidat';
+            $photoPath = $candidate->photo_path ?: null;
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'ref'            => $ref,
+                'election_title' => $vote->position->title ?? 'Scrutin inconnu',
+                'candidat_name'  => $candidateName,
+                'photo_path'     => $photoPath,
+                'date_voted'     => $vote->created_at->format('d/m/Y à H:i'),
+            ],
+        ]);
     }
 
     public function allResults(): JsonResponse

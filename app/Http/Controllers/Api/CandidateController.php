@@ -32,11 +32,23 @@ class CandidateController extends Controller
         $cacheKey   = "candidates_list_pos_{$positionId}_status_{$status}";
 
         $candidates = $this->rememberCache($cacheKey, function () use ($request) {
-            $query = Candidate::with('user', 'position');
+            $query = Candidate::with('user:id,first_name,last_name,email', 'position:id,title,is_active')
+                ->select('id', 'user_id', 'position_id', 'bio', 'slogan', 'status', 'physical_votes', 'created_at', 'updated_at');
             if ($request->has('position_id')) $query->where('position_id', $request->position_id);
             if ($request->has('status'))      $query->where('status', $request->status);
             return $query->get()->toArray();
         }, $this->cacheTtl);
+
+        // Injecter les photos hors cache (data URI base64 trop volumineuses)
+        $ids    = collect($candidates)->pluck('id')->filter()->values();
+        $photos = $ids->isNotEmpty()
+            ? Candidate::whereIn('id', $ids)->pluck('photo_path', 'id')
+            : collect();
+
+        $candidates = collect($candidates)->map(function ($c) use ($photos) {
+            $c['photo_path'] = $photos[$c['id']] ?? null;
+            return $c;
+        })->values()->toArray();
 
         return response()->json(['success' => true, 'data' => $candidates]);
     }
@@ -56,6 +68,7 @@ class CandidateController extends Controller
         }
 
         $data = $validator->validated();
+        unset($data['photo']); // retirer le fichier — seul photo_path va en DB
 
         if ($request->hasFile('photo')) {
             $data['photo_path'] = $this->cloudinary->upload($request->file('photo'));
@@ -100,6 +113,7 @@ class CandidateController extends Controller
         }
 
         $data = $validator->validated();
+        unset($data['photo']); // retirer le fichier — seul photo_path va en DB
 
         if ($request->hasFile('photo')) {
             if ($candidate->photo_path) {
