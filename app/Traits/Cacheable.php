@@ -21,4 +21,22 @@ trait Cacheable
     {
         Cache::forget($key);
     }
-}
+
+    /**
+     * Vider le cache pour un préfixe (toutes les combinaisons pos/status)
+     */
+    protected function forgetCacheByPrefix(string $prefix, array $positions = [], array $statuses = []): void
+    {
+        if (empty($statuses)) {
+            $statuses = ['all', 'en_attente', 'valide', 'refuse'];
+        }
+        if (empty($positions)) {
+            $positions = \App\Models\Position::pluck('id')->toArray();
+            $positions[] = 'all';
+        }
+        foreach ($positions as $posId) {
+            foreach ($statuses as $status) {
+                Cache::forget("{$prefix}_pos_{$posId}_status_{$status}");
+            }
+        }
+    }

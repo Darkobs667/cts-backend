@@ -26,9 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->booted(function () {
         RateLimiter::for('register', function (Request $request) {
-            return Limit::none();
+            return Limit::perMinute(5)->by($request->ip());
         });
         RateLimiter::for('login', function (Request $request) {
-            return Limit::none();
+            return Limit::perMinute(10)->by($request->input('email') . '|' . $request->ip());
         });
     })->create();

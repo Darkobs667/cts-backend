@@ -220,16 +220,4 @@ class CandidateController extends Controller
         return response()->json(['success' => true, 'data' => $candidate]);
     }
 
-    protected function forgetCacheByPrefix(string $prefix): void
-    {
-        $statuses  = ['all', 'en_attente', 'valide', 'refuse'];
-        $positions = \App\Models\Position::pluck('id')->toArray();
-        $positions[] = 'all';
-
-        foreach ($positions as $posId) {
-            foreach ($statuses as $status) {
-                $this->forgetCache("candidates_list_pos_{$posId}_status_{$status}");
-            }
-        }
-    }
 }
