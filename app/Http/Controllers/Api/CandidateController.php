@@ -32,14 +32,28 @@ class CandidateController extends Controller
         $cacheKey   = "candidates_list_pos_{$positionId}_status_{$status}";
 
         $candidates = $this->rememberCache($cacheKey, function () use ($request) {
-            $query = Candidate::with('user:id,first_name,last_name,email', 'position:id,title,is_active')
-                ->select('id', 'user_id', 'position_id', 'bio', 'slogan', 'status', 'physical_votes', 'created_at', 'updated_at');
+            $query = Candidate::with('user:id,first_name,last_name,email', 'position:id,title,is_active');
             if ($request->has('position_id')) $query->where('position_id', $request->position_id);
             if ($request->has('status'))      $query->where('status', $request->status);
-            return $query->get()->toArray();
+
+            return $query->get()->map(function ($c) {
+                return [
+                    'id'             => $c->id,
+                    'user_id'        => $c->user_id,
+                    'position_id'    => $c->position_id,
+                    'bio'            => $c->bio,
+                    'slogan'         => $c->slogan,
+                    'status'         => $c->status,
+                    'physical_votes' => $c->physical_votes,
+                    'created_at'     => (string) $c->created_at,
+                    'updated_at'     => (string) $c->updated_at,
+                    'user'           => $c->user?->toArray(),
+                    'position'       => $c->position?->toArray(),
+                ];
+            })->toArray();
         }, $this->cacheTtl);
 
-        // Injecter les photos hors cache (data URI base64 trop volumineuses)
+        // Injecter les photos hors cache (data URI base64 volumineuses)
         $ids    = collect($candidates)->pluck('id')->filter()->values();
         $photos = $ids->isNotEmpty()
             ? Candidate::whereIn('id', $ids)->pluck('photo_path', 'id')

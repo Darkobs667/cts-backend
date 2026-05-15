@@ -21,9 +21,13 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         throw new \Exception('Utilisateur non authentifié', 401);
     }
 
+    $position = Position::find($positionId);
+    if (!$position || !$position->is_active) {
+        throw new \Exception('Ce scrutin est clôturé ou inexistant.', 403);
+    }
+
     $voterIdentifier = AuthServices::voterHash($user);
 
-    // Vérifie si l'utilisateur a déjà voté pour ce poste
     $existing = Vote::where('position_id', $positionId)
                     ->where('hash_session', $voterIdentifier)
                     ->first();
@@ -69,9 +73,12 @@ public function castVote(int $positionId, ?int $candidateId): Vote
             $candidates = $position->candidates->map(function ($candidate) use ($posVotes, $totalVotes) {
                 $votes = $posVotes->firstWhere('candidate_id', $candidate->id)?->total ?? 0;
                 $pct   = $totalVotes > 0 ? round(($votes / $totalVotes) * 100, 1) : 0;
+                $name  = $candidate->user
+                    ? trim($candidate->user->first_name . ' ' . $candidate->user->last_name)
+                    : 'Candidat #' . $candidate->id;
                 return [
                     'id'          => $candidate->id,
-                    'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
+                    'name'        => $name,
                     'photo_path'  => $candidate->photo_path,
                     'bio'         => $candidate->bio,
                     'slogan'      => $candidate->slogan,

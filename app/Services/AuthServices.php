@@ -56,6 +56,10 @@ class AuthServices
             throw new \Exception("Mot de passe incorrect.", 401);
         }
 
+        if ($user->status === 'suspendu' || $user->status === 'bloque') {
+            throw new \Exception("Ce compte a été suspendu. Contactez un administrateur.", 403);
+        }
+
         $tokens = $this->generateTokens($user);
 
         return [
