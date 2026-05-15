@@ -104,11 +104,17 @@ Route::get('/cron-status', function () {
     ]);
 });
 
+// ⬇️⬇️ AJOUTEZ CES ROUTES ⬇️⬇️
+    Route::get('/votes/my', [VoteController::class, 'myVotes']);
+    Route::get('/votes/check/{positionId}', [VoteController::class, 'checkVote']);
+
 // =============================================
 // ROUTES PROTÉGÉES PAR JWT (Authentification requise)
 // =============================================
 
 Route::middleware('auth:api')->group(function () {
+     Route::get('/auth/verify-role', [AuthController::class, 'verifyRole']);
+    Route::get('/auth/check-admin', [AuthController::class, 'checkAdmin']);
     
     // Positions (admin uniquement pour écriture)
     Route::post('/positions', [PositionController::class, 'store'])->middleware('admin');
@@ -136,7 +142,6 @@ Route::middleware('auth:api')->group(function () {
     
     // Votes
     Route::post('/votes', [VoteController::class, 'store']);
-    Route::get('/votes/my', [VoteController::class, 'myVotes']);
     Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt']);
     
 });

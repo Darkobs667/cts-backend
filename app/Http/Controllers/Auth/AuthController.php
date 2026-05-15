@@ -146,4 +146,65 @@ class AuthController extends Controller
             'token_type' => 'bearer',
         ]);
     }
+     /**
+     * Vérifier le rôle de l'utilisateur connecté
+     * NOUVELLE MÉTHODE À AJOUTER
+     */
+    public function verifyRole(): JsonResponse
+    {
+        try {
+            $user = $this->authService->me();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Non authentifié'
+                ], 401);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $user->id,
+                    'role' => $user->role,        // 'admin' ou 'elect'
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'email' => $user->email
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Token invalide ou expiré'
+            ], 401);
+        }
+    }
+
+    /**
+     * Vérifier rapidement si l'utilisateur est admin
+     * NOUVELLE MÉTHODE À AJOUTER
+     */
+    public function checkAdmin(): JsonResponse
+    {
+        try {
+            $user = $this->authService->me();
+            
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'is_admin' => false
+                ], 401);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'is_admin' => $user->role === 'admin'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'is_admin' => false
+            ], 401);
+        }
+    }
 }

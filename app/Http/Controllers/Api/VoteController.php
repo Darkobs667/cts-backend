@@ -256,4 +256,26 @@ public function exportPDF()
     $pdf = Pdf::loadView('pdf.results', $pdfData);
     return $pdf->download('resultats_scrutins.pdf');
 }
+
+ /**
+     * Vérifier si l'utilisateur a voté pour une position spécifique
+     */
+    public function checkVote($positionId)
+    {
+        $user = auth('api')->user();
+        
+        if (!$user) {
+            return response()->json(['error' => 'Non authentifié'], 401);
+        }
+        
+        $hasVoted = Vote::where('user_id', $user->id)
+            ->where('position_id', $positionId)
+            ->exists();
+        
+        return response()->json([
+            'success' => true,
+            'has_voted' => $hasVoted,
+            'position_id' => $positionId
+        ]);
+    }
 }
