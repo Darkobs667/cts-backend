@@ -53,7 +53,7 @@ RUN echo "Timeout 300" >> /etc/apache2/apache2.conf \
     && echo "KeepAliveTimeout 5" >> /etc/apache2/apache2.conf \
     && echo "MaxKeepAliveRequests 100" >> /etc/apache2/apache2.conf
 
-# Créer un script de démarrage avec health check
+# Créer un script de démarrage avec health check (CORRIGÉ - suppression de --timeout)
 RUN echo '#!/bin/bash\n\
 echo "🚀 Démarrage du backend..."\n\
 \n\
@@ -66,8 +66,8 @@ php artisan view:cache\n\
 # Lancer les migrations\n\
 php artisan migrate --force\n\
 \n\
-# Démarrer le serveur avec timeout augmenté\n\
-php artisan serve --host=0.0.0.0 --port=${PORT:-10000} --timeout=300\n\
+# Démarrer le serveur\n\
+php artisan serve --host=0.0.0.0 --port=${PORT:-10000}\n\
 ' > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
 
 # Exposer le port
