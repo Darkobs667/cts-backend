@@ -50,12 +50,22 @@ RUN echo "Timeout 300" >> /etc/apache2/apache2.conf \
     && echo "KeepAliveTimeout 5" >> /etc/apache2/apache2.conf \
     && echo "MaxKeepAliveRequests 100" >> /etc/apache2/apache2.conf
 
-# Exposer le port standard HTTP (Render utilisera le PORT, mais Apache utilise 80 par défaut)
-EXPOSE 80
+# Configurer Apache pour écouter sur le port fourni par Render (PORT)
+# Render utilise la variable d'environnement PORT (10000 par défaut)
+RUN sed -i "s/Listen 80/Listen \${PORT:-80}/g" /etc/apache2/ports.conf \
+    && sed -i "s/:80/: \${PORT:-80}/g" /etc/apache2/sites-available/000-default.conf
 
-# Script de démarrage utilisant Apache (CORRECTION ICI)
+# Exposer le port (Render injectera PORT automatiquement)
+EXPOSE 10000
+
+# Script de démarrage
 RUN echo '#!/bin/bash\n\
 echo "🚀 Démarrage du backend avec Apache..."\n\
+\n\
+# Créer un fichier .env si non existant\n\
+if [ ! -f .env ]; then\n\
+    cp .env.example .env 2>/dev/null || echo "APP_ENV=production" > .env\n\
+fi\n\
 \n\
 # Nettoyer et recréer le cache\n\
 php artisan config:clear\n\
@@ -66,7 +76,15 @@ php artisan view:cache\n\
 # Lancer les migrations\n\
 php artisan migrate --force\n\
 \n\
-# Démarrer Apache (pas artisan serve)\n\
+# Démarrer Apache sur le bon port\n\
+export PORT=${PORT:-10000}\n\
+echo "Apache va démarrer sur le port $PORT"\n\
+\n\
+# Modifier le port Apache dynamiquement\n\
+sed -i "s/Listen \${PORT:-80}/Listen $PORT/g" /etc/apache2/ports.conf\n\
+sed -i "s/: \${PORT:-80}/:$PORT/g" /etc/apache2/sites-available/000-default.conf\n\
+\n\
+# Démarrer Apache au premier plan\n\
 apache2-foreground\n\
 ' > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
 
