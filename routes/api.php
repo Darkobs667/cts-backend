@@ -17,6 +17,16 @@ use App\Http\Controllers\Api\UserController;
 |--------------------------------------------------------------------------
 */
 
+// routes/api.php - Ajoutez cette route en TOUT PREMIER
+Route::get('/health', function () {
+    return response()->json([
+        'status' => 'ok',
+        'time' => now()->toIso8601String(),
+        'memory' => memory_get_usage(),
+        'database' => DB::connection()->getPdo() ? 'connected' : 'error'
+    ]);
+});
+
 // =============================================
 // ROUTES PUBLIQUES (Accessibles sans authentification)
 // =============================================
@@ -50,6 +60,14 @@ Route::get('/votes/results', [VoteController::class, 'results']);
 Route::match(['GET', 'HEAD'], '/keep-alive', function () {
     return response('', 200);
 });
+
+
+Route::get('/keep-alive', function () {
+    return response('OK', 200)
+        ->header('Content-Type', 'text/plain')
+        ->header('Cache-Control', 'no-cache');
+});
+
 
 // Routes de debug (à retirer en production)
 Route::get('/check-users', function () {

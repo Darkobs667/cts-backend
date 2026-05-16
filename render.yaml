@@ -1,0 +1,24 @@
+# render.yaml
+services:
+  - type: web
+    name: cts-backend
+    runtime: image
+    repo: https://github.com/Darkobs667/cts-backend
+    branch: rollback-backend-hier-12h
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: LOG_CHANNEL
+        value: stack
+    numInstances: 1
+    buildCommand: |
+      composer install --no-interaction --optimize-autoloader --no-dev
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+    startCommand: |
+      php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=10000
