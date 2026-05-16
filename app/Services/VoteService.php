@@ -68,8 +68,12 @@ public function castVote(int $positionId, ?int $candidateId): Vote
                     'started_at'  => $position->started_at,
                     'total_votes' => $position->votes_count,
                     'candidates'  => $position->candidates->map(function ($candidate) {
+                        $fullName = $candidate->user 
+                            ? trim($candidate->user->first_name . ' ' . $candidate->user->last_name)
+                            : 'Candidat inconnu';
+
                         return [
-                            'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
+                            'name'        => $fullName,
                             'votes_count' => $candidate->votes_count,
                             'photo_path'  => $candidate->photo_path,
                             'bio'         => $candidate->bio,
@@ -91,9 +95,7 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         $user = auth('api')->user();
         if (!$user) return collect();
 
-        $hashSession = hash('sha256', $user->id . config('app.key'));
-
-        return Vote::where('hash_session', $hashSession)
+        return Vote::where('hash_session', $user->email)
                    ->pluck('position_id');
     }
 }

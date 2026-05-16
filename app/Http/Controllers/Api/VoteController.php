@@ -255,7 +255,7 @@ class VoteController extends Controller
             return response()->json(['error' => 'Non authentifié'], 401);
         }
         
-        $hasVoted = Vote::where('user_id', $user->id)
+        $hasVoted = Vote::where('hash_session', $user->email)
             ->where('position_id', $positionId)
             ->exists();
         
