@@ -170,9 +170,13 @@ class VoteController extends Controller
         return $pdf->download('Recu_Vote_' . $vote->id . '.pdf');
     }
 
+    /**
+     * Voir tous les résultats (optimisé pour éviter les lenteurs Supabase/N+1)
+     */
     public function allResults(): JsonResponse
     {
         try {
+            // OPTIMISATION : Charger toutes les relations et les comptes en une seule passe
             $positions = Position::with([
                     'candidates' => function($query) {
                         $query->withCount('votes')->with('user');
@@ -182,6 +186,7 @@ class VoteController extends Controller
                 ->get();
 
             $all = $positions->map(function ($position) {
+                // Le tri se fait en mémoire pour ne pas multiplier les requêtes SQL
                 $candidatesData = $position->candidates->map(function ($candidate) {
                     return [
                         'id'          => $candidate->id,
@@ -208,9 +213,12 @@ class VoteController extends Controller
         }
     }
 
+    /**
+     * Export PDF optimisé pour les environnements à forte latence
+     */
     public function exportPDF()
     {
-        // Récupérer tous les scrutins avec leurs candidats et votes de manière optimisée
+        // Récupérer tous les scrutins avec leurs candidats et votes de manière groupée (eager loading)
         $positions = Position::with([
                 'candidates' => function($query) {
                     $query->withCount('votes')->with('user');

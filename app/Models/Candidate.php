@@ -34,8 +34,11 @@ public function position()
     return $this->belongsTo(Position::class);
 }
 
+/**
+ * Relation avec les votes pour ce candidat.
+ * Utilisée avec withCount('votes') pour optimiser les performances des résultats.
+ */
 public function votes()
 {
     return $this->hasMany(Vote::class);
-}
-}
+}}

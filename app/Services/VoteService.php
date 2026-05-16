@@ -49,15 +49,18 @@ public function castVote(int $positionId, ?int $candidateId): Vote
 
     /**
      * Obtenir les résultats actuels pour tous les postes.
+     * OPTIMISÉ : Utilise withCount() et le chargement lié (eager loading) 
+     * pour éviter le problème N+1 et réduire les appels à la base de données.
      */
     public function getResults(): Collection
     {
         return Position::with([
                 'candidates' => function($query) {
+                    // On pré-charge l'utilisateur et on compte les votes en une seule requête groupée
                     $query->withCount('votes')->with('user');
                 }
             ])
-            ->withCount('votes')
+            ->withCount('votes') // Compte global des votes par position
             ->where('is_active', true)
             ->get()
             ->map(function ($position) {
