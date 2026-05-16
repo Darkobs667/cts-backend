@@ -50,33 +50,37 @@ public function castVote(int $positionId, ?int $candidateId): Vote
     /**
      * Obtenir les résultats actuels pour tous les postes.
      */
-  public function getResults(): Collection
-{
-    return Position::with(['candidates.user'])
-        ->where('is_active', true)   // ← ne garder que les postes actifs
-        ->get()
-        ->map(function ($position) {
-            $totalVotes = Vote::where('position_id', $position->id)->count();
-            return [
-                'id'          => $position->id,
-                'title'       => $position->title,
-                'is_active'   => $position->is_active,
-                  'started_at'  => $position->started_at,   // <-- ajoute ceci
-                'total_votes' => $totalVotes,
-                'candidates'  => $position->candidates->map(function ($candidate) {
-                    return [
-                        'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
-                        'votes_count' => Vote::where('candidate_id', $candidate->id)->count(),
-                        'photo_path'  => $candidate->photo_path,
-                        'bio'         => $candidate->bio,
-                        'profession'  => $candidate->user->role ?? 'Électeur',
-                    ];
-                })
-            ];
-        })
-        ->sortByDesc('total_votes')
-        ->values();
-}
+    public function getResults(): Collection
+    {
+        return Position::with([
+                'candidates' => function($query) {
+                    $query->withCount('votes')->with('user');
+                }
+            ])
+            ->withCount('votes')
+            ->where('is_active', true)
+            ->get()
+            ->map(function ($position) {
+                return [
+                    'id'          => $position->id,
+                    'title'       => $position->title,
+                    'is_active'   => (bool) $position->is_active,
+                    'started_at'  => $position->started_at,
+                    'total_votes' => $position->votes_count,
+                    'candidates'  => $position->candidates->map(function ($candidate) {
+                        return [
+                            'name'        => $candidate->user->first_name . ' ' . $candidate->user->last_name,
+                            'votes_count' => $candidate->votes_count,
+                            'photo_path'  => $candidate->photo_path,
+                            'bio'         => $candidate->bio,
+                            'profession'  => $candidate->user->role ?? 'Électeur',
+                        ];
+                    })
+                ];
+            })
+            ->sortByDesc('total_votes')
+            ->values();
+    }
 
 
     /**

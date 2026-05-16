@@ -171,91 +171,78 @@ class VoteController extends Controller
     }
 
     public function allResults(): JsonResponse
-{
-    try {
-        $positions = Position::all();
-        $all = [];
+    {
+        try {
+            $positions = Position::with([
+                    'candidates' => function($query) {
+                        $query->withCount('votes')->with('user');
+                    }
+                ])
+                ->withCount('votes')
+                ->get();
 
-        foreach ($positions as $position) {
-            $totalVotes = Vote::where('position_id', $position->id)->count();
-            $candidates = Candidate::where('position_id', $position->id)->get();
+            $all = $positions->map(function ($position) {
+                $candidatesData = $position->candidates->map(function ($candidate) {
+                    return [
+                        'id'          => $candidate->id,
+                        'name'        => ($candidate->user->first_name ?? '') . ' ' . ($candidate->user->last_name ?? ''),
+                        'photo_path'  => $candidate->photo_path,
+                        'votes_count' => $candidate->votes_count,
+                    ];
+                })->sortByDesc('votes_count')->values();
 
-            $candidatesData = [];
-            foreach ($candidates as $candidate) {
-                $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
-
-                // Récupérer l'utilisateur lié au candidat
-                $user = User::find($candidate->user_id);
-                $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
-
-                $candidatesData[] = [
-                    'id'          => $candidate->id,
-                    'name'        => $fullName,
-                    'photo_path'  => $candidate->photo_path,
-                    'votes_count' => $candidateVotes,
+                return [
+                    'id'          => $position->id,
+                    'title'       => $position->title,
+                    'is_active'   => (bool) $position->is_active,
+                    'total_votes' => $position->votes_count,
+                    'candidates'  => $candidatesData,
                 ];
-            }
+            });
 
-            // Trier par votes décroissants
-            usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
+            return response()->json(['success' => true, 'data' => $all]);
 
-            $all[] = [
-                'id'          => $position->id,
+        } catch (\Exception $e) {
+            Log::error('Erreur dans allResults : ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function exportPDF()
+    {
+        // Récupérer tous les scrutins avec leurs candidats et votes de manière optimisée
+        $positions = Position::with([
+                'candidates' => function($query) {
+                    $query->withCount('votes')->with('user');
+                }
+            ])
+            ->withCount('votes')
+            ->get();
+
+        $data = $positions->map(function ($position) {
+            $candidatesData = $position->candidates->map(function ($candidate) {
+                return [
+                    'name'        => ($candidate->user->first_name ?? '') . ' ' . ($candidate->user->last_name ?? ''),
+                    'votes_count' => $candidate->votes_count,
+                ];
+            })->sortByDesc('votes_count')->values();
+
+            return [
                 'title'       => $position->title,
                 'is_active'   => (bool) $position->is_active,
-                'total_votes' => $totalVotes,
+                'total_votes' => $position->votes_count,
                 'candidates'  => $candidatesData,
             ];
-        }
+        });
 
-        return response()->json(['success' => true, 'data' => $all]);
-
-    } catch (\Exception $e) {
-        Log::error('Erreur dans allResults : ' . $e->getMessage());
-        return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-    }
-}
-
-public function exportPDF()
-{
-    // Récupérer tous les scrutins avec leurs candidats et votes
-    $positions = Position::all();
-    $data = [];
-
-    foreach ($positions as $position) {
-        $totalVotes = Vote::where('position_id', $position->id)->count();
-        $candidates = Candidate::where('position_id', $position->id)->get();
-        $candidatesData = [];
-
-        foreach ($candidates as $candidate) {
-            $candidateVotes = Vote::where('candidate_id', $candidate->id)->count();
-            $user = User::find($candidate->user_id);
-            $fullName = $user ? ($user->first_name . ' ' . $user->last_name) : 'Candidat';
-            $candidatesData[] = [
-                'name'        => $fullName,
-                'votes_count' => $candidateVotes,
-            ];
-        }
-
-        // Trier par votes décroissants
-        usort($candidatesData, fn($a, $b) => $b['votes_count'] <=> $a['votes_count']);
-
-        $data[] = [
-            'title'       => $position->title,
-            'is_active'   => $position->is_active,
-            'total_votes' => $totalVotes,
-            'candidates'  => $candidatesData,
+        $pdfData = [
+            'elections'    => $data,
+            'generated_at' => now()->format('d/m/Y H:i:s'),
         ];
+
+        $pdf = Pdf::loadView('pdf.results', $pdfData);
+        return $pdf->download('resultats_scrutins.pdf');
     }
-
-    $pdfData = [
-        'elections'    => $data,
-        'generated_at' => now()->format('d/m/Y H:i:s'),
-    ];
-
-    $pdf = Pdf::loadView('pdf.results', $pdfData);
-    return $pdf->download('resultats_scrutins.pdf');
-}
 
  /**
      * Vérifier si l'utilisateur a voté pour une position spécifique
