@@ -21,7 +21,7 @@ class AuthServices
     public function register(array $data): array
     {
         // 
-        if(User::where('browserId',$data['browserId'])->exists()){
+        if (User::where('browserId', $data['browserId'])->exists()) {
             return ['errors' => 'Vous avez deja creer un compte sur cette appareil, vous ne pouvez pas en creer un autre'];
         }
 
@@ -40,19 +40,15 @@ class AuthServices
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
                 'code' => $data['code'],
-                'email' => $data['email'],
+                'email' => strtolower($data['email']),
                 'browserId'=>$data['browserId'],
                 'password' => Hash::make($data['password']),
             ]);
-
-            $tokens = $this->generateTokens($user);
 
             DB::commit();
 
             return [
                 'user' => $user,
-                'access_token' => $tokens['access_token'],
-                'refresh_token' => $tokens['refresh_token'],
             ];
         } catch (\Exception $e) {
             DB::rollBack();
@@ -79,11 +75,11 @@ class AuthServices
         }
 
         if (!$user) {
-            throw new \Exception("Utilisateur non trouvé avec ce email ", 404);
+            throw new \Exception('Identifiants invalides', 401);
         }
 
         if (!Hash::check($credentials['password'], $user->password)) {
-            throw new \Exception("Mot de passe incorrect", 401);
+            throw new \Exception('Identifiants invalides', 401);
         }
 
         $tokens = $this->generateTokens($user);

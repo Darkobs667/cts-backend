@@ -70,6 +70,15 @@ class PositionController extends Controller
         }
     }
 
+    public function show($id): JsonResponse
+    {
+        $position = Position::with([
+            'candidates' => fn ($query) => $query->where('status', 'valide')->with('user'),
+        ])->findOrFail($id);
+
+        return response()->json(['success' => true, 'data' => $position]);
+    }
+
     /**
      * Mettre à jour un poste (Admin uniquement)
      */
@@ -77,7 +86,11 @@ class PositionController extends Controller
     {
         $position = Position::findOrFail($id);
 
-        $data = $request->only('title', 'description', 'is_active');
+        $data = $request->validate([
+            'title' => 'sometimes|string|max:255|unique:positions,title,'.$id,
+            'description' => 'nullable|string|max:5000',
+            'is_active' => 'sometimes|boolean',
+        ]);
 
         // Si on active le scrutin et qu'il n'a pas encore de date de début, on l'enregistre
         if (isset($data['is_active']) && $data['is_active'] == true && !$position->started_at) {

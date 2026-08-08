@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     curl \
-    && docker-php-ext-install pdo_mysql pdo_pgsql mbstring zip
+    && docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql mbstring zip
 
 # Installer Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -25,9 +25,6 @@ COPY . .
 
 # Installer les dépendances PHP
 RUN composer install --no-interaction --optimize-autoloader --no-dev
-
-# Créer le lien symbolique pour le stockage
-RUN php artisan storage:link
 
 # Configurer les permissions
 RUN chown -R www-data:www-data /var/www/html \
@@ -50,43 +47,10 @@ RUN echo "Timeout 300" >> /etc/apache2/apache2.conf \
     && echo "KeepAliveTimeout 5" >> /etc/apache2/apache2.conf \
     && echo "MaxKeepAliveRequests 100" >> /etc/apache2/apache2.conf
 
-# Configurer Apache pour écouter sur le port fourni par Render (PORT)
-# Render utilise la variable d'environnement PORT (10000 par défaut)
-RUN sed -i "s/Listen 80/Listen \${PORT:-80}/g" /etc/apache2/ports.conf \
-    && sed -i "s/:80/: \${PORT:-80}/g" /etc/apache2/sites-available/000-default.conf
-
-# Exposer le port (Render injectera PORT automatiquement)
+# Render injecte PORT à l'exécution. Le script de démarrage configure Apache.
 EXPOSE 10000
 
-# Script de démarrage
-RUN echo '#!/bin/bash\n\
-echo "🚀 Démarrage du backend avec Apache..."\n\
-\n\
-# Créer un fichier .env si non existant\n\
-if [ ! -f .env ]; then\n\
-    cp .env.example .env 2>/dev/null || echo "APP_ENV=production" > .env\n\
-fi\n\
-\n\
-# Nettoyer et recréer le cache\n\
-php artisan config:clear\n\
-php artisan config:cache\n\
-php artisan route:cache\n\
-php artisan view:cache\n\
-\n\
-# Lancer les migrations\n\
-php artisan migrate --force\n\
-\n\
-# Démarrer Apache sur le bon port\n\
-export PORT=${PORT:-10000}\n\
-echo "Apache va démarrer sur le port $PORT"\n\
-\n\
-# Modifier le port Apache dynamiquement\n\
-sed -i "s/Listen \${PORT:-80}/Listen $PORT/g" /etc/apache2/ports.conf\n\
-sed -i "s/: \${PORT:-80}/:$PORT/g" /etc/apache2/sites-available/000-default.conf\n\
-\n\
-# Démarrer Apache au premier plan\n\
-apache2-foreground\n\
-' > /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+RUN chmod +x /var/www/html/docker/start.sh
 
 # Commande de démarrage
-CMD ["/usr/local/bin/start.sh"]
+CMD ["/var/www/html/docker/start.sh"]

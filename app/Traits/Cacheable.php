@@ -21,4 +21,14 @@ trait Cacheable
     {
         Cache::forget($key);
     }
+
+    protected function cacheVersion(string $namespace): int
+    {
+        return (int) Cache::get("{$namespace}:version", 1);
+    }
+
+    protected function bumpCacheVersion(string $namespace): void
+    {
+        Cache::forever("{$namespace}:version", $this->cacheVersion($namespace) + 1);
+    }
 }

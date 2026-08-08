@@ -17,6 +17,9 @@ return [
 
     'default' => env('CACHE_STORE', 'file'),
 
+    // Le rate limiter doit utiliser un stockage partagé et atomique en production.
+    'limiter' => env('CACHE_LIMITER', 'database'),
+
     /*
     |--------------------------------------------------------------------------
     | Cache Stores

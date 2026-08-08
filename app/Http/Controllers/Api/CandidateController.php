@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Candidate;
 use App\Services\CandidatService;
+use App\Services\CandidatePhotoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
@@ -17,7 +18,10 @@ class CandidateController extends Controller
     protected $candidatService;
     protected $cacheTtl = 300;  // 5 minutes
 
-    public function __construct(CandidatService $candidatService)
+    public function __construct(
+        CandidatService $candidatService,
+        private readonly CandidatePhotoService $photoService,
+    )
     {
         $this->candidatService = $candidatService;
     }
@@ -29,27 +33,36 @@ class CandidateController extends Controller
     {
         // Construction d'une clé de cache unique basée sur les paramètres
         $positionId = $request->get('position_id', 'all');
-        $status = $request->get('status', 'all');
-        $cacheKey = "candidates_list_pos_{$positionId}_status_{$status}";
+        $perPage = min(max($request->integer('per_page', 20), 1), 50);
+        $page = max($request->integer('page', 1), 1);
+        $status = $request->get('status', 'valide');
+        if (!in_array($status, ['valide', 'en_attente', 'refuse'], true)) {
+            return response()->json(['message' => 'Statut de candidature invalide.'], 422);
+        }
+
+        if ($status !== 'valide' && auth('api')->user()?->role !== 'admin') {
+            return response()->json(['message' => 'Accès administrateur requis.'], 403);
+        }
+        $cacheKey = 'candidates:v'.$this->cacheVersion('candidates')
+            .":pos_{$positionId}:status_{$status}:page_{$page}:per_page_{$perPage}";
         
-        $candidates = $this->rememberCache($cacheKey, function () use ($request) {
+        $candidates = $this->rememberCache($cacheKey, function () use ($request, $status, $perPage) {
             $query = Candidate::with('user', 'position');
 
             if ($request->has('position_id')) {
                 $query->where('position_id', $request->position_id);
             }
 
-            if ($request->has('status')) {
-                $query->where('status', $request->status);
-            }
+            $query->where('status', $status);
 
             // Convertir en array pour éviter les problèmes de sérialisation
-            return $query->get()->toArray();
+            return $query->orderByDesc('id')->paginate($perPage)->toArray();
         }, $this->cacheTtl);
 
         return response()->json([
             'success' => true,
-            'data' => $candidates,
+            'data' => $candidates['data'],
+            'meta' => collect($candidates)->except('data')->all(),
         ]);
     }
 
@@ -61,14 +74,14 @@ class CandidateController extends Controller
         $data = $request->validate([
             'user_id' => 'required|exists:users,id',
             'position_id' => 'required|exists:positions,id',
-            'slogan' => 'nullable|string',
-            'bio' => 'nullable|string',
-            'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'slogan' => 'nullable|string|max:255',
+            'bio' => 'nullable|string|max:5000',
+            'photo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         // Gestion de l'upload de la photo
         if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('candidates', 'public');
+            $data = array_merge($data, $this->storePhoto($request->file('photo')));
         }
 
         $candidate = $this->candidatService->create($data);
@@ -81,6 +94,16 @@ class CandidateController extends Controller
             'message' => 'Candidat créé avec succès',
             'data' => $candidate,
         ], 201);
+    }
+
+    public function show($id): JsonResponse
+    {
+        $candidate = Candidate::with(['user', 'position'])->findOrFail($id);
+        if ($candidate->status !== 'valide' && auth('api')->user()?->role !== 'admin') {
+            abort(404);
+        }
+
+        return response()->json(['success' => true, 'data' => $candidate]);
     }
 
     /**
@@ -106,27 +129,36 @@ class CandidateController extends Controller
         $data = $request->validate([
             'user_id' => 'sometimes|exists:users,id',
             'position_id' => 'sometimes|exists:positions,id',
-            'slogan' => 'nullable|string',
-            'bio' => 'nullable|string',
-            'photo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'slogan' => 'nullable|string|max:255',
+            'bio' => 'nullable|string|max:5000',
+            'photo' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
+        $previousPhotoPublicId = $candidate->photo_public_id;
+        $previousPhotoPath = $candidate->photo_path;
         if ($request->hasFile('photo')) {
-            // Supprimer l'ancienne photo si elle existe
-            if ($candidate->photo_path) {
-                Storage::disk('public')->delete($candidate->photo_path);
-            }
-            $data['photo_path'] = $request->file('photo')->store('candidates', 'public');
+            $data = array_merge($data, $this->storePhoto($request->file('photo')));
         }
 
         $result = $this->candidatService->update($candidate, $data);
+
+        if ($result && $request->hasFile('photo')) {
+            if ($previousPhotoPublicId) {
+                $this->photoService->delete($previousPhotoPublicId);
+            } elseif ($previousPhotoPath) {
+                Storage::disk('public')->delete($previousPhotoPath);
+            }
+        }
 
         // ← VIDER LE CACHE APRÈS MODIFICATION
         $this->forgetCacheByPrefix('candidates_list');
         $this->forgetCache("candidate_{$id}");
         $this->forgetCache('admin_global_stats');
 
-        return response()->json(['message' => 'Candidat mis à jour avec succès']);
+        return response()->json([
+            'message' => 'Candidat mis à jour avec succès',
+            'data' => $candidate->fresh(['user', 'position']),
+        ]);
     }
 
     /**
@@ -157,9 +189,9 @@ class CandidateController extends Controller
 
         $validator = Validator::make($request->all(), [
             'position_id' => 'required|exists:positions,id',
-            'bio'         => 'nullable|string',
-            'slogan'      => 'nullable|string',
-            'photo'       => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'bio'         => 'nullable|string|max:5000',
+            'slogan'      => 'nullable|string|max:255',
+            'photo'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
         ]);
 
         if ($validator->fails()) {
@@ -179,7 +211,7 @@ class CandidateController extends Controller
         $data['status'] = 'en_attente';
 
         if ($request->hasFile('photo')) {
-            $data['photo_path'] = $request->file('photo')->store('candidates', 'public');
+            $data = array_merge($data, $this->storePhoto($request->file('photo')));
         }
 
         $candidate = Candidate::create($data);
@@ -233,9 +265,16 @@ class CandidateController extends Controller
      */
     protected function forgetCacheByPrefix($prefix)
     {
-        $this->forgetCache('candidates_list_pos_all_status_all');
-        $this->forgetCache('candidates_list_pos_all_status_en_attente');
-        $this->forgetCache('candidates_list_pos_all_status_valide');
-        $this->forgetCache('candidates_list_pos_all_status_refuse');
+        $this->bumpCacheVersion('candidates');
+    }
+
+    private function storePhoto($photo): array
+    {
+        $asset = $this->photoService->upload($photo);
+
+        return [
+            'photo_path' => $asset['secure_url'],
+            'photo_public_id' => $asset['public_id'],
+        ];
     }
 }

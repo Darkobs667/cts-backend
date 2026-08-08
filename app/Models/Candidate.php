@@ -1,11 +1,12 @@
 <?php
 
 namespace App\Models;
+use App\Services\CandidatePhotoService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
-#[Fillable(['user_id', 'position_id', 'bio','status', 'photo_path'])]
+#[Fillable(['user_id', 'position_id', 'bio', 'slogan', 'status', 'photo_path', 'photo_public_id'])]
 
 class Candidate extends Model
 {
@@ -15,6 +16,13 @@ class Candidate extends Model
      * @var array<int, string>
      */
     use HasFactory;
+
+    protected $appends = ['photo_url'];
+
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return CandidatePhotoService::deliveryUrl($this->photo_path);
+    }
 
         /**
         * Get the user that owns the candidate.

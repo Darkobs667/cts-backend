@@ -2,11 +2,13 @@
 services:
   - type: web
     name: cts-backend
-    runtime: image
+    runtime: docker
     repo: https://github.com/Darkobs667/cts-backend
     branch: rollback-backend-hier-12h
     plan: free
     healthCheckPath: /api/health
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     envVars:
       - key: APP_ENV
         value: production
@@ -14,11 +16,22 @@ services:
         value: false
       - key: LOG_CHANNEL
         value: stack
+      - key: APP_KEY
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: cts/candidates
+      - key: CANDIDATE_PHOTO_STORAGE
+        value: cloudinary
+      - key: CACHE_STORE
+        value: database
+      - key: CACHE_LIMITER
+        value: database
     numInstances: 1
-    buildCommand: |
-      composer install --no-interaction --optimize-autoloader --no-dev
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-    startCommand: |
-      php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=10000

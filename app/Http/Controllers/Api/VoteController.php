@@ -50,11 +50,34 @@ class VoteController extends Controller
             return response()->json(['message' => 'Utilisateur non authentifié'], 401);
         }
 
-        $voterIdentifier = $user->email;
+        if ($user->role !== 'electeur' || $user->status !== 'Validé') {
+            return response()->json(['message' => 'Seuls les électeurs validés peuvent voter.'], 403);
+        }
+
+        $position = Position::findOrFail($request->position_id);
+        if (!$position->is_active) {
+            return response()->json(['message' => 'Ce scrutin est fermé.'], 403);
+        }
+
+        if ($request->filled('candidate_id')) {
+            $candidateIsEligible = Candidate::whereKey($request->candidate_id)
+                ->where('position_id', $position->id)
+                ->where('status', 'valide')
+                ->exists();
+
+            if (!$candidateIsEligible) {
+                return response()->json([
+                    'message' => 'Ce candidat ne peut pas recevoir de vote pour ce scrutin.'
+                ], 422);
+            }
+        }
+
+        // Store a keyed digest rather than an email address in the ballot table.
+        $voterIdentifier = hash_hmac('sha256', (string) $user->id, config('app.key'));
 
         // Vérification de doublon
         $existing = Vote::where('position_id', $request->position_id)
-                        ->where('hash_session', $voterIdentifier)
+                        ->whereIn('hash_session', [$voterIdentifier, $user->email])
                         ->first();
 
         if ($existing) {
@@ -82,11 +105,101 @@ class VoteController extends Controller
                 'message' => 'Votre vote a été enregistré avec succès.',
                 'data'    => $vote,
             ], 201);
-        } catch (\Exception $e) {
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            return response()->json(['message' => 'Vous avez déjà voté pour ce poste.'], 409);
+        } catch (\Throwable $e) {
+            report($e);
             return response()->json([
-                'message' => $e->getMessage(),
+                'message' => 'Le vote n’a pas pu être enregistré. Réessayez dans quelques instants.',
             ], 500);
         }
+    }
+
+    /**
+     * Enregistre plusieurs choix en un seul bulletin confirmé par l'électeur.
+     * Chaque poste reste vérifié indépendamment côté serveur.
+     */
+    public function batchStore(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'votes' => 'required|array|min:1|max:20',
+            'votes.*.position_id' => 'required|integer|distinct|exists:positions,id',
+            'votes.*.candidate_id' => 'nullable|integer|exists:candidates,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $user = auth('api')->user();
+        if (!$user) {
+            return response()->json(['message' => 'Utilisateur non authentifié'], 401);
+        }
+        if ($user->role !== 'electeur' || $user->status !== 'Validé') {
+            return response()->json(['message' => 'Seuls les électeurs validés peuvent voter.'], 403);
+        }
+
+        $choices = $validator->validated()['votes'];
+        $positions = Position::query()
+            ->whereIn('id', collect($choices)->pluck('position_id'))
+            ->get()
+            ->keyBy('id');
+
+        foreach ($choices as $choice) {
+            $position = $positions->get($choice['position_id']);
+            if (!$position?->is_active) {
+                return response()->json(['message' => 'Un des scrutins sélectionnés est fermé. Actualisez la page.'], 409);
+            }
+
+            if (!empty($choice['candidate_id']) && !Candidate::query()
+                ->whereKey($choice['candidate_id'])
+                ->where('position_id', $position->id)
+                ->where('status', 'valide')
+                ->exists()) {
+                return response()->json(['message' => 'Un des candidats sélectionnés ne peut pas recevoir ce vote.'], 422);
+            }
+        }
+
+        $voterIdentifier = hash_hmac('sha256', (string) $user->id, config('app.key'));
+
+        try {
+            $votes = \Illuminate\Support\Facades\DB::transaction(function () use ($choices, $voterIdentifier, $user) {
+                $positionIds = collect($choices)->pluck('position_id');
+                $alreadyVoted = Vote::query()
+                    ->whereIn('position_id', $positionIds)
+                    ->whereIn('hash_session', [$voterIdentifier, $user->email])
+                    ->lockForUpdate()
+                    ->exists();
+
+                if ($alreadyVoted) {
+                    throw new \RuntimeException('Un ou plusieurs scrutins ont déjà reçu votre vote. Actualisez la page.');
+                }
+
+                return collect($choices)->map(fn (array $choice) => Vote::create([
+                    'position_id' => $choice['position_id'],
+                    'candidate_id' => $choice['candidate_id'] ?? null,
+                    'hash_session' => $voterIdentifier,
+                ]));
+            });
+        } catch (\RuntimeException|\Illuminate\Database\UniqueConstraintViolationException $e) {
+            return response()->json(['message' => 'Un ou plusieurs scrutins ont déjà reçu votre vote. Actualisez la page.'], 409);
+        } catch (\Throwable $e) {
+            report($e);
+            return response()->json(['message' => 'Les votes n’ont pas pu être enregistrés. Réessayez dans quelques instants.'], 500);
+        }
+
+        foreach ($positions as $position) {
+            $this->forgetCache('vote_results_' . $position->id);
+        }
+        $this->forgetCache('vote_results_all');
+        $this->forgetCache('admin_global_stats');
+        $this->forgetCache('positions_list');
+        $this->forgetCache('positions_active_list');
+
+        return response()->json([
+            'message' => $votes->count() . ' vote(s) enregistré(s) avec succès.',
+            'data' => $votes->values(),
+        ], 201);
     }
 
     /**
@@ -125,13 +238,15 @@ class VoteController extends Controller
             return response()->json(['message' => 'Non authentifié'], 401);
         }
 
-        $votes = Vote::where('hash_session', $user->email)
+        $voterIdentifier = hash_hmac('sha256', (string) $user->id, config('app.key'));
+        $votes = Vote::whereIn('hash_session', [$voterIdentifier, $user->email])
                     ->with('position')
                     ->orderBy('created_at', 'desc')
                     ->get()
                     ->map(function ($vote) {
                         return [
                             'id'              => $vote->id,
+                            'position_id'     => $vote->position_id,
                             'election_title'   => $vote->position->title ?? 'Scrutin inconnu',
                             'date_voted'       => $vote->created_at->toIsoString(),
                             'transaction_ref'  => 'CTS-' . strtoupper(substr(md5($vote->id), 0, 8)),
@@ -149,7 +264,7 @@ class VoteController extends Controller
         }
 
         $vote = Vote::where('id', $voteId)
-                    ->where('hash_session', $user->email)
+                    ->whereIn('hash_session', [hash_hmac('sha256', (string) $user->id, config('app.key')), $user->email])
                     ->with('position', 'candidate.user')
                     ->first();
 
@@ -187,7 +302,7 @@ class VoteController extends Controller
 
             $all = $positions->map(function ($position) {
                 // Le tri se fait en mémoire pour ne pas multiplier les requêtes SQL
-                $candidatesData = $position->candidates->map(function ($candidate) {
+                $candidatesData = $position->candidates->where('status', 'valide')->map(function ($candidate) {
                     return [
                         'id'          => $candidate->id,
                         'name'        => ($candidate->user->first_name ?? '') . ' ' . ($candidate->user->last_name ?? ''),
@@ -228,7 +343,7 @@ class VoteController extends Controller
             ->get();
 
         $data = $positions->map(function ($position) {
-            $candidatesData = $position->candidates->map(function ($candidate) {
+            $candidatesData = $position->candidates->where('status', 'valide')->map(function ($candidate) {
                 return [
                     'name'        => ($candidate->user->first_name ?? '') . ' ' . ($candidate->user->last_name ?? ''),
                     'votes_count' => $candidate->votes_count,
@@ -263,7 +378,7 @@ class VoteController extends Controller
             return response()->json(['error' => 'Non authentifié'], 401);
         }
         
-        $hasVoted = Vote::where('hash_session', $user->email)
+        $hasVoted = Vote::whereIn('hash_session', [hash_hmac('sha256', (string) $user->id, config('app.key')), $user->email])
             ->where('position_id', $positionId)
             ->exists();
         

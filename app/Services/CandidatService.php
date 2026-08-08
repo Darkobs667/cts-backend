@@ -6,9 +6,13 @@ use App\Models\Candidate;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Collection;
 use App\Models\Vote;
+use App\Services\CandidatePhotoService;
 
 class CandidatService 
 {
+    public function __construct(private readonly CandidatePhotoService $photoService)
+    {
+    }
     /**
      * Créer un nouveau candidat (Réservé aux admins)
      */
@@ -26,7 +30,10 @@ class CandidatService
             'user_id'     => $data['user_id'], 
             'position_id' => $data['position_id'],
             'bio'         => $data['bio'] ?? null,
+            'slogan'      => $data['slogan'] ?? null,
+            'status'      => $data['status'] ?? 'valide',
             'photo_path'  => $data['photo_path'] ?? null,
+            'photo_public_id' => $data['photo_public_id'] ?? null,
         ]);
     }
 
@@ -101,7 +108,9 @@ class CandidatService
     Vote::where('candidate_id', $candidate->id)->delete();
 
     // Supprimer la photo si elle existe
-    if ($candidate->photo_path) {
+    if ($candidate->photo_public_id) {
+        $this->photoService->delete($candidate->photo_public_id);
+    } elseif ($candidate->photo_path) {
         \Storage::disk('public')->delete($candidate->photo_path);
     }
 

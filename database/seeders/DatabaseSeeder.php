@@ -22,7 +22,7 @@ class DatabaseSeeder extends Seeder
             "first_name"=> "user admin",
             'last_name' => 'Test User',
             'email' => 'admin@gmail.com',
-            'password'=>'hackdev 23'
+            'password' => Hash::make('change-this-test-password')
         ]);
     }
 }

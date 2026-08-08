@@ -22,22 +22,16 @@ public function castVote(int $positionId, ?int $candidateId): Vote
     }
 
     // Utilise l'email de l'utilisateur comme identifiant de session
-    $voterIdentifier = $user->email;
+    $voterIdentifier = hash_hmac('sha256', (string) $user->id, config('app.key'));
 
     // Vérifie si l'utilisateur a déjà voté pour ce poste
     $existing = Vote::where('position_id', $positionId)
-                    ->where('hash_session', $voterIdentifier)
+                    ->whereIn('hash_session', [$voterIdentifier, $user->email])
                     ->first();
 
     if ($existing) {
         throw new \Exception('Vous avez déjà voté pour ce poste.', 409);
     }
-
-    \Log::info('Données du vote', [
-    'position_id' => $positionId,
-    'candidate_id' => $candidateId,
-    'hash_session' => $voterIdentifier,
-]);
 
     // Création du vote AVEC hash_session
     return Vote::create([
@@ -98,7 +92,8 @@ public function castVote(int $positionId, ?int $candidateId): Vote
         $user = auth('api')->user();
         if (!$user) return collect();
 
-        return Vote::where('hash_session', $user->email)
+        $voterIdentifier = hash_hmac('sha256', (string) $user->id, config('app.key'));
+        return Vote::whereIn('hash_session', [$voterIdentifier, $user->email])
                    ->pluck('position_id');
     }
 }
