@@ -90,7 +90,7 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/candidates/{id}/reject', [CandidateController::class, 'reject'])->middleware(['admin', 'throttle:admin-write']);
     
     // Postuler (utilisateur connecté)
-    Route::post('/apply', [CandidateController::class, 'apply'])->middleware(['throttle:application', 'throttle:upload']);
+    Route::post('/apply', [CandidateController::class, 'apply'])->middleware(['electeur', 'throttle:application', 'throttle:upload']);
     
     // Utilisateurs (admin)
     Route::get('/users', [UserController::class, 'index'])->middleware('admin');
@@ -98,10 +98,10 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/users/{id}', [UserController::class, 'destroy'])->middleware('admin');
     
     // Votes
-    Route::post('/votes', [VoteController::class, 'store'])->middleware('throttle:vote');
-    Route::post('/votes/batch', [VoteController::class, 'batchStore'])->middleware('throttle:vote');
-    Route::get('/votes/my', [VoteController::class, 'myVotes']);
-    Route::get('/votes/check/{positionId}', [VoteController::class, 'checkVote']);
-    Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt']);
+    Route::post('/votes', [VoteController::class, 'store'])->middleware(['electeur', 'throttle:vote']);
+    Route::post('/votes/batch', [VoteController::class, 'batchStore'])->middleware(['electeur', 'throttle:vote']);
+    Route::get('/votes/my', [VoteController::class, 'myVotes'])->middleware('electeur');
+    Route::get('/votes/check/{positionId}', [VoteController::class, 'checkVote'])->middleware('electeur');
+    Route::get('/voter/receipt/{voteId}', [VoteController::class, 'receipt'])->middleware('electeur');
     
 });

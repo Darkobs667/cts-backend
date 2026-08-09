@@ -15,7 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->api(prepend: [
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
         ]);
-        $middleware->alias(['admin' => \App\Http\Middleware\CheckAdmin::class]);
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\CheckAdmin::class,
+            'electeur' => \App\Http\Middleware\CheckElecteur::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
