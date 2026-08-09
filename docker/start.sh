@@ -13,5 +13,6 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 php artisan migrate --force
+php artisan cts:provision-admin --no-interaction
 
 exec apache2-foreground

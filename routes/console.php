@@ -50,3 +50,31 @@ Artisan::command('cts:create-admin', function () {
     $this->info("Le compte {$email} peut désormais administrer les élections.");
     return self::SUCCESS;
 })->purpose('Créer ou promouvoir de façon sécurisée un compte administrateur CTS');
+
+Artisan::command('cts:provision-admin', function () {
+    $email = strtolower(trim((string) config('admin.initial_email')));
+    $password = (string) config('admin.initial_password');
+
+    // Cette commande est sûre à lancer à chaque démarrage : sans les deux
+    // variables Render, elle ne modifie aucun compte et le déploiement continue.
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL) || mb_strlen($password) < 12) {
+        $this->comment('Provisionnement administrateur ignoré : CTS_ADMIN_EMAIL ou CTS_ADMIN_PASSWORD absent/invalide.');
+        return self::SUCCESS;
+    }
+
+    $user = User::firstOrNew(['email' => $email]);
+    $created = !$user->exists;
+    $user->first_name = $user->first_name ?: 'Admin';
+    $user->last_name = $user->last_name ?: 'CTS';
+    $user->password = Hash::make($password);
+    $user->role = 'admin';
+    $user->status = 'Validé';
+    $user->email_verified_at ??= now();
+    $user->save();
+
+    $this->info($created
+        ? "Compte administrateur {$email} créé."
+        : "Compte {$email} promu ou mis à jour comme administrateur.");
+
+    return self::SUCCESS;
+})->purpose('Provisionner depuis CTS_ADMIN_EMAIL et CTS_ADMIN_PASSWORD le premier administrateur');
