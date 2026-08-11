@@ -15,7 +15,7 @@ services:
       - key: APP_DEBUG
         value: false
       - key: LOG_CHANNEL
-        value: stack
+        value: stderr
       - key: APP_KEY
         sync: false
       - key: APP_URL

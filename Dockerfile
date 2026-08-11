@@ -1,56 +1,60 @@
-# Utiliser l'image officielle PHP 8.3 avec Apache
-FROM php:8.3-apache
+FROM php:8.3-fpm-alpine
 
-# Activer mod_rewrite
-RUN a2enmod rewrite
+# Nginx sert les fichiers publics et transmet PHP à PHP-FPM.
+RUN apk add --no-cache \
+        nginx \
+        bash \
+        curl \
+        git \
+        unzip \
+        zip \
+        libpq \
+        libpq-dev \
+        libzip-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        icu-dev \
+        oniguruma-dev \
+        libxml2-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" \
+        bcmath \
+        gd \
+        intl \
+        mbstring \
+        pdo_mysql \
+        pdo_pgsql \
+        pgsql \
+        xml \
+        zip
 
-# Installer les extensions nécessaires
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    libonig-dev \
-    libzip-dev \
-    zip \
-    unzip \
-    curl \
-    && docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql mbstring zip
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Installer Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Définir le répertoire de travail
 WORKDIR /var/www/html
 
-# Copier les fichiers du projet
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader --no-scripts
+
 COPY . .
 
-# Installer les dépendances PHP
-RUN composer install --no-interaction --optimize-autoloader --no-dev
+RUN composer dump-autoload --no-dev --optimize \
+    && mkdir -p /run/nginx /var/www/html/storage/app/public \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R ug=rwx /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Configurer les permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+COPY docker/nginx.conf.template /etc/nginx/http.d/default.conf.template
+COPY docker/php-fpm-render.conf /usr/local/etc/php-fpm.d/zz-render.conf
 
-# Configurer le DocumentRoot vers /public
-ENV APACHE_DOCUMENT_ROOT /var/www/html/public
-RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
-RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+RUN printf '%s\n' \
+      'expose_php = Off' \
+      'memory_limit = 256M' \
+      'upload_max_filesize = 10M' \
+      'post_max_size = 10M' \
+      'max_execution_time = 60' \
+      > /usr/local/etc/php/conf.d/render.ini \
+    && chmod +x /var/www/html/docker/start.sh
 
-# Augmenter les timeouts PHP
-RUN echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/timeout.ini \
-    && echo "max_input_time = 300" >> /usr/local/etc/php/conf.d/timeout.ini \
-    && echo "memory_limit = 512M" >> /usr/local/etc/php/conf.d/memory.ini
-
-# Configurer Apache timeout
-RUN echo "Timeout 300" >> /etc/apache2/apache2.conf \
-    && echo "KeepAlive On" >> /etc/apache2/apache2.conf \
-    && echo "KeepAliveTimeout 5" >> /etc/apache2/apache2.conf \
-    && echo "MaxKeepAliveRequests 100" >> /etc/apache2/apache2.conf
-
-# Render injecte PORT à l'exécution. Le script de démarrage configure Apache.
 EXPOSE 10000
 
-RUN chmod +x /var/www/html/docker/start.sh
-
-# Commande de démarrage
 CMD ["/var/www/html/docker/start.sh"]
